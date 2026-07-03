@@ -4,11 +4,7 @@
 > sales pipelines, broadcasts, and no-code automations. Fork it, brand
 > it, host it.
 
-<p align="center">
-  <a href="https://www.hostinger.com/web-apps-hosting">
-    <img src="./.github/assets/hostinger-deploy.png" alt="Ship your Node.js app in one click — Deploy to Hostinger" width="900">
-  </a>
-</p>
+
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
 [![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
@@ -58,10 +54,10 @@ This is a **template**, not a product. Forking means you get:
   modules you don't, redesign anything. The stack is boring on
   purpose (Next.js + Supabase + Tailwind) so the learning curve is
   short.
-- **Zero ops to start** — [Hostinger](https://www.hostinger.com/web-apps-hosting)
-  Managed Node.js deploys a fork in a few clicks. No Docker, no
-  Kubernetes, no infra team needed.
-  ([See below ↓](#-deploy-on-hostinger-recommended))
+- **Flexible deployment** — runs on any VPS with Docker, on a
+  dedicated server, or locally. Docker Swarm deploy with automatic
+  SSL (Traefik) takes minutes.
+  ([See below ↓](#-deploy-on-docker-swarm))
 - **Real security primitives** — token encryption (AES-256-GCM), RLS
   on every table, HMAC-verified webhooks, CSP, rate limiting, CI
   typecheck/build on every PR.
@@ -83,51 +79,71 @@ npm run dev
 Open <http://localhost:3000>. You'll be redirected to `/login` (or
 `/dashboard` if already signed in).
 
-## 🚀 Deploy on Hostinger (recommended)
+## 🐳 Deploy on Docker Swarm
 
-<p align="center">
-  <a href="https://www.hostinger.com/web-apps-hosting">
-    <img src="./.github/assets/hostinger-deploy.png" alt="Ship your Node.js app in one click — Deploy to Hostinger" width="1000">
-  </a>
-</p>
-<p align="center">
-  <a href="https://wacrm.tech/docs/deployment-hostinger">
-    <img src="https://img.shields.io/badge/Step--by--step_guide-wacrm.tech%2Fdocs-111?style=for-the-badge" alt="Step-by-step guide" height="44">
-  </a>
-</p>
+wacrm is designed to run on **any VPS with Docker** — single node
+Swarm mode with Traefik as reverse proxy handles SSL automatically.
 
-**wacrm is built to run on [Hostinger](https://www.hostinger.com/web-apps-hosting).**
-It's the path we test, document, and recommend — and the fastest way
-to get a production-grade CRM live without owning a VPS or a
-Kubernetes cluster.
+### Prerequisites
 
-### Why Hostinger?
+- A VPS running Ubuntu/Debian with Docker
+- Docker Swarm initialised (`docker swarm init`)
+- Traefik running in Swarm with Let's Encrypt configured
+- A domain pointing to your VPS IP
 
-| | |
+### Setup
+
+```bash
+# Clone the repository
+cd /opt
+git clone https://github.com/<your-username>/wacrm
+cd wacrm
+
+# Create environment file — see .env.local.example for all vars
+cp .env.local.example .env.local
+nano .env.local
+
+# Build the Docker image
+docker build -t wacrm:latest .
+
+# Deploy to Swarm
+docker stack deploy -c wacrm.yaml wacrm
+```
+
+### Environment variables
+
+Required variables — configure in `.env.local` before building:
+
+| Variable | Description |
 |---|---|
-| **One-click Git deploy** | Connect your fork, push to `main`, Hostinger builds and ships it. No SSH, no Docker, no CI to wire up — this repo's own `main` deploys this way. |
-| **Managed Node.js** | Next.js 16 (App Router, server actions, ISR) runs out of the box on [Premium, Business, and Cloud](https://www.hostinger.com/web-apps-hosting) shared plans. You don't manage Node versions, processes, or reverse proxies. |
-| **Free SSL + free domain** | Automatic Let's Encrypt on your custom domain (or a free one included with annual plans). HTTPS is on by default — required for the WhatsApp Business webhook. |
-| **Global CDN + LiteSpeed** | Static assets cached at the edge, dynamic routes served from LiteSpeed. Snappy dashboards out of the box, no Cloudflare setup required. |
-| **Env vars + logs in hPanel** | Set `SUPABASE_*`, `WHATSAPP_*`, and `ENCRYPTION_KEY` from the panel — no `.env` on the server. Live application logs in the same UI. |
-| **DDoS protection + daily backups** | Built-in, no add-ons. The webhook endpoint is a public target — having protection at the edge matters. |
-| **Cheaper than a VPS** | Plans start at a few dollars a month — order-of-magnitude less than a comparable managed Node.js host, and you don't pay extra for the database (that's Supabase). |
-| **24/7 human support** | Live chat support in 20+ languages — useful when your CRM is the thing your team relies on to talk to customers. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key (bypasses RLS) |
+| `ENCRYPTION_KEY` | 64-char hex for token encryption (`crypto.randomBytes(32).toString('hex')`) |
+| `META_APP_SECRET` | Meta App Secret for webhook verification |
+| `NEXT_PUBLIC_SITE_URL` | Public URL of your CRM (`https://crm.seudominio.com`) |
 
-### The 60-second version
+### Traefik configuration
 
-1. **Fork** this repo on GitHub.
-2. In **hPanel → Websites → Create**, pick **Node.js** and connect
-   your fork.
-3. Paste your Supabase + Meta env vars into hPanel.
-4. Push to `main`. Hostinger builds and serves it. Done.
+The included `wacrm.yaml` expects Traefik running with these labels.
+Adjust the domain and certresolver to match your setup:
 
-Full walkthrough with screenshots:
-**[wacrm.tech/docs/deployment-hostinger](https://wacrm.tech/docs/deployment-hostinger)**.
+```yaml
+labels:
+  - traefik.http.routers.wacrm.rule=Host(`crm.seudominio.com`)
+  - traefik.http.routers.wacrm.entrypoints=websecure
+  - traefik.http.routers.wacrm.tls.certresolver=letsencryptresolver
+  - traefik.http.services.wacrm.loadbalancer.server.port=3000
+```
 
-> _Note: wacrm is MIT-licensed and runs anywhere Node.js does
-> (Vercel, Railway, your own VPS). Hostinger is recommended, not
-> required._
+### Updating
+
+```bash
+cd /opt/wacrm
+git pull
+docker build -t wacrm:latest .
+docker stack deploy -c wacrm.yaml wacrm
+```
 
 ## Documentation
 
@@ -141,7 +157,7 @@ Key pages:
 - [Supabase setup](https://wacrm.tech/docs/supabase-setup)
 - [WhatsApp setup](https://wacrm.tech/docs/whatsapp-setup)
 - [Environment variables](https://wacrm.tech/docs/environment-variables)
-- [Deploy on Hostinger](https://wacrm.tech/docs/deployment-hostinger)
+- [Deploy on Docker Swarm](#-deploy-on-docker-swarm)
 - [Architecture](https://wacrm.tech/docs/architecture)
 - [Troubleshooting](https://wacrm.tech/docs/troubleshooting)
 
