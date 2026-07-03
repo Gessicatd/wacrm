@@ -1,0 +1,50 @@
+## --------------------------- WACRM -------------------------- ##
+
+  wacrm:
+    image: wacrm:latest
+    hostname: wacrm
+
+    networks:
+      - DwbCNet
+
+    environment:
+      - NODE_ENV=production
+
+      ## Supabase
+      - NEXT_PUBLIC_SUPABASE_URL=https://seu-projeto.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
+      - SUPABASE_SERVICE_ROLE_KEY=seu-service-role-key
+
+      ## Criptografia e Segurança
+      - ENCRYPTION_KEY=64-char-hex-key
+      - META_APP_SECRET=seu-meta-app-secret
+
+      ## URL pública
+      - NEXT_PUBLIC_SITE_URL=https://crm.seudominio.com
+
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1024M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.wacrm.rule=Host(`crm.seudominio.com`)
+        - traefik.http.routers.wacrm.entrypoints=websecure
+        - traefik.http.routers.wacrm.priority=10
+        - traefik.http.routers.wacrm.tls.certresolver=letsencryptresolver
+        - traefik.http.routers.wacrm.service=wacrm
+        - traefik.http.services.wacrm.loadbalancer.server.port=3000
+        - traefik.http.services.wacrm.loadbalancer.passHostHeader=1
+
+## --------------------------- WACRM -------------------------- ##
+
+networks:
+  DwbCNet:
+    external: true
+    name: DwbCNet
