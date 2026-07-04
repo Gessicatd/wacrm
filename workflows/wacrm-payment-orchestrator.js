@@ -10,27 +10,13 @@ import {
 } from "@n8n/workflow-sdk";
 
 // ============================================================
-// WACRM Payment Orchestrator
+// WACRM - ORQUESTRADOR DE PAGAMENTOS
 //
-// Receives webhooks from wacrm automations and routes to the
-// correct action: generate payment, check status, send media.
-//
-// wacrm automations use the "send_webhook" step to POST here
-// with body: { action, contact, conversation, message, ... }
-//
-// Setup:
-//   1. Create an API key in wacrm (Settings → API Keys)
-//      with scope messages:send
-//   2. In n8n, create credentials:
-//      - "WACRM API" (Header Auth) → key: Authorization,
-//        value: Bearer <sua_wacrm_api_key>
-//      - "Gateway Pagamento" (Bearer Auth) → seu token
-//   3. Update payment_gateway_url placeholder
+// Recebe webhooks das automacoes do wacrm e roteia acoes:
+//   generate_charge - criar cobranca na gateway + enviar link
+//   check_payment   - verificar status + notificar cliente
+//   send_media      - enviar midia via wacrm API
 // ============================================================
-
-// --------------------------------------------------
-// WEBHOOK TRIGGER
-// --------------------------------------------------
 
 const webhook = trigger({
   type: "n8n-nodes-base.webhook",
@@ -45,63 +31,37 @@ const webhook = trigger({
     },
     position: [240, 300],
   },
-  output: [
-    {
-      body: {
-        action: "",
-        contact: { id: "", name: "", phone: "" },
-        conversation: { id: "" },
-        data: {},
-      },
-    },
-  ],
+  output: [{ body: { action: "", contact: { id: "", name: "", phone: "" }, conversation: { id: "" }, data: {} } }],
 });
-
-// --------------------------------------------------
-// EXTRACT AND NORMALIZE
-// --------------------------------------------------
 
 const extract = node({
   type: "n8n-nodes-base.set",
   version: 3.4,
   config: {
-    name: "Extract Data",
+    name: "Normalizar Dados",
     parameters: {
       mode: "manual",
       includeOtherFields: true,
       assignments: {
         assignments: [
-          { id: "action", name: "action", value: expr("{{ $('Webhook (wacrm)').item.json.body.action }}"), type: "string" },
-          { id: "contact_id", name: "contact_id", value: expr("{{ $('Webhook (wacrm)').item.json.body.contact.id }}"), type: "string" },
-          { id: "contact_name", name: "contact_name", value: expr("{{ $('Webhook (wacrm)').item.json.body.contact.name }}"), type: "string" },
-          { id: "contact_phone", name: "contact_phone", value: expr("{{ $('Webhook (wacrm)').item.json.body.contact.phone }}"), type: "string" },
-          { id: "conversation_id", name: "conversation_id", value: expr("{{ $('Webhook (wacrm)').item.json.body.conversation.id }}"), type: "string" },
-          { id: "custom_data", name: "custom_data", value: expr("{{ $('Webhook (wacrm)').item.json.body.data }}"), type: "object" },
+          { id: "a", name: "action", value: expr("{{ $('Webhook (wacrm)').item.json.body.action }}"), type: "string" },
+          { id: "b", name: "contact_id", value: expr("{{ $('Webhook (wacrm)').item.json.body.contact.id }}"), type: "string" },
+          { id: "c", name: "contact_name", value: expr("{{ $('Webhook (wacrm)').item.json.body.contact.name }}"), type: "string" },
+          { id: "d", name: "contact_phone", value: expr("{{ $('Webhook (wacrm)').item.json.body.contact.phone }}"), type: "string" },
+          { id: "e", name: "conversation_id", value: expr("{{ $('Webhook (wacrm)').item.json.body.conversation.id }}"), type: "string" },
+          { id: "f", name: "custom_data", value: expr("{{ $('Webhook (wacrm)').item.json.body.data }}"), type: "object" },
         ],
       },
     },
     position: [540, 300],
   },
-  output: [
-    {
-      action: "",
-      contact_id: "",
-      contact_name: "",
-      contact_phone: "",
-      conversation_id: "",
-      custom_data: {},
-    },
-  ],
+  output: [{ action: "", contact_id: "", contact_name: "", contact_phone: "", conversation_id: "", custom_data: {} }],
 });
-
-// --------------------------------------------------
-// ROUTE BY ACTION (Switch)
-// --------------------------------------------------
 
 const router = switchCase({
   version: 3.4,
   config: {
-    name: "Route by Action",
+    name: "Roteador",
     parameters: {
       mode: "rules",
       rules: {
@@ -109,69 +69,34 @@ const router = switchCase({
           {
             conditions: {
               combinator: "and",
-              options: {
-                caseSensitive: true,
-                leftValue: "",
-                typeValidation: "strict",
-              },
-              conditions: [
-                {
-                  leftValue: expr("{{ $('Extract Data').item.json.action }}"),
-                  rightValue: "generate_charge",
-                  operator: { type: "string", operation: "equals" },
-                },
-              ],
+              options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
+              conditions: [{ leftValue: expr("{{ $('Normalizar Dados').item.json.action }}"), rightValue: "generate_charge", operator: { type: "string", operation: "equals" } }],
             },
-            renameOutput: true,
-            outputKey: "Gerar Cobrança",
+            renameOutput: true, outputKey: "Gerar Cobranca",
           },
           {
             conditions: {
               combinator: "and",
-              options: {
-                caseSensitive: true,
-                leftValue: "",
-                typeValidation: "strict",
-              },
-              conditions: [
-                {
-                  leftValue: expr("{{ $('Extract Data').item.json.action }}"),
-                  rightValue: "check_payment",
-                  operator: { type: "string", operation: "equals" },
-                },
-              ],
+              options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
+              conditions: [{ leftValue: expr("{{ $('Normalizar Dados').item.json.action }}"), rightValue: "check_payment", operator: { type: "string", operation: "equals" } }],
             },
-            renameOutput: true,
-            outputKey: "Verificar Pagamento",
+            renameOutput: true, outputKey: "Verificar Pagamento",
           },
           {
             conditions: {
               combinator: "and",
-              options: {
-                caseSensitive: true,
-                leftValue: "",
-                typeValidation: "strict",
-              },
-              conditions: [
-                {
-                  leftValue: expr("{{ $('Extract Data').item.json.action }}"),
-                  rightValue: "send_media",
-                  operator: { type: "string", operation: "equals" },
-                },
-              ],
+              options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
+              conditions: [{ leftValue: expr("{{ $('Normalizar Dados').item.json.action }}"), rightValue: "send_media", operator: { type: "string", operation: "equals" } }],
             },
-            renameOutput: true,
-            outputKey: "Enviar Mídia",
+            renameOutput: true, outputKey: "Enviar Midia",
           },
         ],
       },
-      options: {
-        fallbackOutput: "extra",
-      },
+      options: { fallbackOutput: "extra" },
     },
     position: [840, 300],
   },
-  output: [{ action: "generate_charge" }, { action: "check_payment" }, { action: "send_media" }, {}],
+  output: [{}, {}, {}, {}],
 });
 
 // ============================================================
@@ -182,83 +107,59 @@ const chargeApi = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Criar Cobrança",
+    name: "Criar Cobranca na Gateway",
     parameters: {
       method: "POST",
       url: placeholder("https://api.asaas.com/v3/payments"),
-      sendHeaders: true,
-      headerParameters: {
-        parameters: [
-          { name: "Content-Type", value: "application/json" },
-        ],
-      },
       authentication: "genericCredentialType",
       genericAuthType: "httpBearerAuth",
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
       jsonBody: expr(
         '{\n' +
-        '  "customer": "{{ $("Extract Data").item.json.contact_name }}",\n' +
-        '  "value": {{ $("Extract Data").item.json.custom_data.amount }},\n' +
-        '  "description": "{{ $("Extract Data").item.json.custom_data.description }}"\n' +
+        '  "customer": "{{ $("Normalizar Dados").item.json.contact_name }}",\n' +
+        '  "value": {{ $("Normalizar Dados").item.json.custom_data.amount }},\n' +
+        '  "description": "{{ $("Normalizar Dados").item.json.custom_data.description }}"\n' +
         '}',
       ),
-      options: {
-        timeout: 15000,
-        response: { response: { responseFormat: "json" } },
-      },
+      options: { timeout: 15000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpBearerAuth: newCredential("Gateway Pagamento") },
     executeOnce: true,
-    position: [1140, 100],
+    position: [1140, 50],
   },
-  output: [
-    {
-      id: "",
-      invoiceUrl: "",
-      pixQrCode: "",
-      pixCopyPaste: "",
-      bankSlipUrl: "",
-      barcode: "",
-      status: "",
-    },
-  ],
+  output: [{ id: "", invoiceUrl: "", pixQrCode: "", pixCopyPaste: "", bankSlipUrl: "", barcode: "", status: "" }],
 });
 
 const sendChargeToWacrm = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Enviar Link p/ Cliente",
+    name: "Enviar Link pro Cliente",
     parameters: {
       method: "POST",
       url: placeholder("https://crm.seudominio.com/api/v1/messages"),
-      sendHeaders: true,
-      headerParameters: {
-        parameters: [
-          { name: "Content-Type", value: "application/json" },
-        ],
-      },
       authentication: "genericCredentialType",
       genericAuthType: "httpHeaderAuth",
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
       jsonBody: expr(
         '{\n' +
-        '  "to": "{{ $("Extract Data").item.json.contact_phone }}",\n' +
-        '  "text": "Segue seu link de pagamento:\n{{ $json.invoiceUrl }}"\n' +
+        '  "to": "{{ $("Normalizar Dados").item.json.contact_phone }}",\n' +
+        '  "text": "Segue seu link de pagamento:\n{{ $("Criar Cobranca na Gateway").item.json.invoiceUrl }}"\n' +
         '}',
       ),
-      options: {
-        timeout: 10000,
-        response: { response: { responseFormat: "json" } },
-      },
+      options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpHeaderAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [1440, 100],
+    position: [1440, 50],
   },
   output: [{ data: {} }],
 });
@@ -271,26 +172,19 @@ const paymentStatus = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Consultar Status Pagamento",
+    name: "Consultar Status na Gateway",
     parameters: {
       method: "GET",
       url: placeholder("https://api.asaas.com/v3/payments/{payment_id}"),
-      sendHeaders: true,
-      headerParameters: {
-        parameters: [
-          { name: "Content-Type", value: "application/json" },
-        ],
-      },
       authentication: "genericCredentialType",
       genericAuthType: "httpBearerAuth",
-      options: {
-        timeout: 10000,
-        response: { response: { responseFormat: "json" } },
-      },
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
+      options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpBearerAuth: newCredential("Gateway Pagamento") },
     executeOnce: true,
-    position: [1140, 300],
+    position: [1140, 200],
   },
   output: [{ id: "", status: "", paidDate: "" }],
 });
@@ -299,35 +193,28 @@ const notifyPaymentConfirmed = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Notificar Cliente",
+    name: "Notificar Confirmacao",
     parameters: {
       method: "POST",
       url: placeholder("https://crm.seudominio.com/api/v1/messages"),
-      sendHeaders: true,
-      headerParameters: {
-        parameters: [
-          { name: "Content-Type", value: "application/json" },
-        ],
-      },
       authentication: "genericCredentialType",
       genericAuthType: "httpHeaderAuth",
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
       jsonBody: expr(
         '{\n' +
-        '  "to": "{{ $("Extract Data").item.json.contact_phone }}",\n' +
+        '  "to": "{{ $("Normalizar Dados").item.json.contact_phone }}",\n' +
         '  "text": "Pagamento confirmado! Obrigado pela compra 🎉"\n' +
         '}',
       ),
-      options: {
-        timeout: 10000,
-        response: { response: { responseFormat: "json" } },
-      },
+      options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpHeaderAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [1440, 300],
+    position: [1440, 200],
   },
   output: [{ data: {} }],
 });
@@ -340,55 +227,39 @@ const sendMediaToWacrm = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Enviar Mídia",
+    name: "Enviar Midia",
     parameters: {
       method: "POST",
       url: placeholder("https://crm.seudominio.com/api/v1/messages"),
-      sendHeaders: true,
-      headerParameters: {
-        parameters: [
-          { name: "Content-Type", value: "application/json" },
-        ],
-      },
       authentication: "genericCredentialType",
       genericAuthType: "httpHeaderAuth",
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
       jsonBody: expr(
         '{\n' +
-        '  "to": "{{ $("Extract Data").item.json.contact_phone }}",\n' +
-        '  "media_type": "{{ $("Extract Data").item.json.custom_data.media_type }}",\n' +
-        '  "media_url": "{{ $("Extract Data").item.json.custom_data.media_url }}"\n' +
+        '  "to": "{{ $("Normalizar Dados").item.json.contact_phone }}",\n' +
+        '  "media_type": "{{ $("Normalizar Dados").item.json.custom_data.media_type }}",\n' +
+        '  "media_url": "{{ $("Normalizar Dados").item.json.custom_data.media_url }}"\n' +
         '}',
       ),
-      options: {
-        timeout: 15000,
-        response: { response: { responseFormat: "json" } },
-      },
+      options: { timeout: 15000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpHeaderAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [1140, 500],
+    position: [1140, 350],
   },
   output: [{ data: {} }],
 });
 
-// ============================================================
-// COMPOSE WORKFLOW
-// ============================================================
-
-export default workflow(
-  "wacrm-payment-orchestrator",
-  "WACRM - Orquestrador de Pagamentos",
-)
-  .add(sticky("## WACRM - Orquestrador de Pagamentos\n\nRecebe webhooks do wacrm e executa ações:\n- **generate_charge**: Cria cobrança no Asaas/MP e envia link\n- **check_payment**: Verifica status e notifica cliente\n- **send_media**: Envia mídia via wacrm API\n\n### Antes de ativar:\n1. Crie credenciais \"WACRM API\" (Header Auth) e \"Gateway Pagamento\" (Bearer Auth)\n2. Atualize a URL do wacrm no placeholder\n3. Configure a automação no wacrm com step send_webhook"))
-
+export default workflow("wacrm-payment-orchestrator", "WACRM - Orquestrador de Pagamentos")
+  .add(sticky("## WACRM - Orquestrador de Pagamentos\n\nRecebe webhooks do wacrm e roteia acoes:\n- **generate_charge**: Cria cobranca na API de pagamento e envia link via WhatsApp\n- **check_payment**: Consulta status na gateway e notifica cliente\n- **send_media**: Envia midia (imagem, video, documento) via wacrm API"))
   .add(webhook)
   .to(extract)
-  .to(
-    router
-      .onCase(0, chargeApi.to(sendChargeToWacrm))
-      .onCase(1, paymentStatus.to(notifyPaymentConfirmed))
-      .onCase(2, sendMediaToWacrm),
+  .to(router
+    .onCase(0, chargeApi.to(sendChargeToWacrm))
+    .onCase(1, paymentStatus.to(notifyPaymentConfirmed))
+    .onCase(2, sendMediaToWacrm),
   );
