@@ -14,8 +14,8 @@ import {
 // ============================================================
 // WACRM - VERIFICADOR DE PAGAMENTOS (Mercado Pago)
 //
-// A cada 5 min, busca pagamentos aprovados no Mercado Pago
-// e notifica o cliente via WhatsApp.
+// A cada 5 min, busca pagamentos aprovados no MP,
+// descobre o telefone via wacrm API e notifica o cliente.
 // ============================================================
 
 const schedule = trigger({
@@ -31,14 +31,14 @@ const schedule = trigger({
   output: [{}],
 });
 
-const searchPayments = node({
+const searchApproved = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Buscar Pagamentos MP",
+    name: "Buscar Aprovados",
     parameters: {
       method: "GET",
-      url: placeholder("https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=50"),
+      url: "https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=50&status=approved",
       authentication: "genericCredentialType",
       genericAuthType: "httpBearerAuth",
       sendHeaders: true,
@@ -49,32 +49,83 @@ const searchPayments = node({
     alwaysOutputData: true,
     position: [540, 300],
   },
-  output: [{ results: [{ id: "", status: "", external_reference: "", date_approved: "" }] }],
+  output: [{ results: [{ id: 0, status: "approved", external_reference: "", date_approved: "" }], paging: { total: 0 } }],
 });
 
-const checkApproved = ifElse({
+const checkResult = ifElse({
   version: 2.3,
   config: {
-    name: "Foi aprovado?",
+    name: "Tem aprovados?",
     parameters: {
       conditions: {
-        combinator: "or",
-        options: { caseSensitive: true, leftValue: "", typeValidation: "loose" },
+        combinator: "and",
+        options: { caseSensitive: false, leftValue: "", typeValidation: "loose" },
         conditions: [
-          { leftValue: expr("{{ $json.status }}"), rightValue: "approved", operator: { type: "string", operation: "equals" } },
+          { leftValue: expr("{{ $json.paging.total }}"), rightValue: "0", operator: { type: "number", operation: "larger" } },
         ],
       },
     },
-    position: [840, 200],
+    position: [840, 300],
   },
   output: [{}, {}],
 });
 
-const notifyApproved = node({
+const sibNode = splitInBatches({
+  version: 3,
+  config: {
+    name: "Processar Lote",
+    parameters: { batchSize: 10 },
+    position: [1140, 300],
+  },
+});
+
+const fetchConversation = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "Notificar Pagamento",
+    name: "Buscar Conversa (API)",
+    parameters: {
+      method: "GET",
+      url: expr('https://wacrm.autofunil.com.br/api/v1/conversations/{{ $json.external_reference }}'),
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
+      authentication: "genericCredentialType",
+      genericAuthType: "httpBearerAuth",
+      options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
+    },
+    credentials: { httpBearerAuth: newCredential("WACRM API") },
+    executeOnce: true,
+    position: [1440, 200],
+  },
+  output: [{ data: { id: "", contact_id: "", status: "" } }],
+});
+
+const fetchContact = node({
+  type: "n8n-nodes-base.httpRequest",
+  version: 4.4,
+  config: {
+    name: "Buscar Contato (API)",
+    parameters: {
+      method: "GET",
+      url: expr('https://wacrm.autofunil.com.br/api/v1/contacts/{{ $("Buscar Conversa (API)").item.json.data.contact_id }}'),
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
+      authentication: "genericCredentialType",
+      genericAuthType: "httpBearerAuth",
+      options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
+    },
+    credentials: { httpBearerAuth: newCredential("WACRM API") },
+    executeOnce: true,
+    position: [1740, 200],
+  },
+  output: [{ data: { id: "", name: "", phone: "" } }],
+});
+
+const notifyClient = node({
+  type: "n8n-nodes-base.httpRequest",
+  version: 4.4,
+  config: {
+    name: "Notificar Cliente",
     parameters: {
       method: "POST",
       url: placeholder("https://wacrm.autofunil.com.br/api/v1/messages"),
@@ -85,33 +136,31 @@ const notifyApproved = node({
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
-      jsonBody: expr('{\n  "to": "{{ $json.external_reference }}",\n  "text": "Pagamento confirmado! Obrigado pela compra 🎉"\n}'),
+      jsonBody: expr('{\n  "to": "{{ $("Buscar Contato (API)").item.json.data.phone }}",\n  "text": "Pagamento confirmado! Obrigado pela compra 🎉"\n}'),
       options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
-    credentials: { httpBearerAuth: newCredential("Mercado Pago") },
+    credentials: { httpBearerAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [1140, 100],
+    position: [2040, 200],
   },
   output: [{ data: {} }],
 });
 
-const sibNode = splitInBatches({
-  version: 3,
-  config: {
-    name: "Processar Lote",
-    parameters: { batchSize: 10 },
-    position: [840, 300],
-  },
-});
+const fim = node({ type: "n8n-nodes-base.noOp", version: 1, config: { name: "Aguardar" }, position: [1440, 400] });
 
 export default workflow("wacrm-payment-checker", "WACRM - Verificador de Pagamentos")
-  .add(sticky("## WACRM - Verificador de Pagamentos (Mercado Pago)\n\nExecuta a cada 5 minutos.\n1. Busca pagamentos recentes no Mercado Pago\n2. Filtra os aprovados\n3. Notifica o cliente via WhatsApp"))
+  .add(sticky("## WACRM - Verificador (Mercado Pago)\n\nA cada 5 min busca pagamentos com status=approved no MP.\nPara cada um, descobre o contato via wacrm API e notifica."))
   .add(schedule)
-  .to(searchPayments)
-  .to(sibNode
-    .onDone(node({ type: "n8n-nodes-base.noOp", version: 1, config: { name: "Fim" }, position: [1140, 400] }))
-    .onEachBatch(checkApproved
-      .onTrue(notifyApproved)
-      .onFalse(nextBatch(sibNode)),
-    ),
+  .to(searchApproved)
+  .to(checkResult
+    .onTrue(sibNode
+      .onDone(fim)
+      .onEachBatch(
+        fetchConversation
+          .to(fetchContact)
+          .to(notifyClient)
+          .to(nextBatch(sibNode)),
+      ),
+    )
+    .onFalse(fim),
   );
