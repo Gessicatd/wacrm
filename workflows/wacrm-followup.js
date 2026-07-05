@@ -12,67 +12,60 @@ import {
   newCredential,
 } from "@n8n/workflow-sdk";
 
-// ============================================================
-// WACRM - FOLLOW-UP AUTOMATICO DE VENDAS
-//
-// Agenda: a cada 1 hora
-// Verifica pagamentos pendentes ha mais de N horas e envia
-// lembretes progressivos ao cliente.
-//
-// Regras de follow-up:
-//   4h sem pagar  → 1o lembrete (cortesia)
-//   24h sem pagar → 2o lembrete (urgente)
-//   48h sem pagar → 3o lembrete + aviso de expiracao
-// ============================================================
-
 const schedule = trigger({
   type: "n8n-nodes-base.scheduleTrigger",
   version: 1.3,
   config: {
     name: "Schedule (1 hora)",
     parameters: {
-      rule: {
-        interval: [
-          { field: "hours", hoursInterval: 1, triggerAtMinute: 0 },
-        ],
-      },
+      rule: { interval: [{ field: "hours", hoursInterval: 1, triggerAtMinute: 0 }] },
     },
     position: [240, 300],
   },
   output: [{}],
 });
 
-const fetchPending = node({
-  type: "n8n-nodes-base.dataTable",
-  version: 1.1,
+const searchPending = node({
+  type: "n8n-nodes-base.httpRequest",
+  version: 4.4,
   config: {
     name: "Buscar Pendentes",
     parameters: {
-      resource: "row",
-      operation: "get",
-      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
-      matchType: "allConditions",
-      filters: {
-        conditions: [
-          { keyName: "status", condition: "eq", keyValue: "pending" },
-        ],
-      },
-      returnAll: true,
-      orderBy: true,
-      orderByColumn: "createdAt",
-      orderByDirection: "ASC",
+      method: "GET",
+      url: "https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=100",
+      authentication: "genericCredentialType",
+      genericAuthType: "httpBearerAuth",
+      sendHeaders: true,
+      headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
+      options: { timeout: 15000, response: { response: { responseFormat: "json" } } },
     },
+    credentials: { httpBearerAuth: newCredential("Mercado Pago") },
     alwaysOutputData: true,
     position: [540, 300],
   },
-  output: [{ id: 1, payment_id: "", contact_phone: "", contact_name: "", amount: 0, status: "pending", reminder_count: 0, createdAt: "" }],
+  output: [{ results: [{ id: 0, status: "pending", date_created: "", external_reference: "" }] }],
 });
 
-// --------------------------------------------------
-// Calculate hours since creation
-// --------------------------------------------------
+const checkPending = ifElse({
+  version: 2.3,
+  config: {
+    name: "Pendente?",
+    parameters: {
+      conditions: {
+        combinator: "or",
+        options: { caseSensitive: true, leftValue: "", typeValidation: "loose" },
+        conditions: [
+          { leftValue: expr("{{ $json.status }}"), rightValue: "pending", operator: { type: "string", operation: "equals" } },
+          { leftValue: expr("{{ $json.status }}"), rightValue: "in_process", operator: { type: "string", operation: "equals" } },
+        ],
+      },
+    },
+    position: [840, 200],
+  },
+  output: [{}, {}],
+});
 
-const calcHours = node({
+const calcAge = node({
   type: "n8n-nodes-base.set",
   version: 3.4,
   config: {
@@ -82,99 +75,21 @@ const calcHours = node({
       includeOtherFields: true,
       assignments: {
         assignments: [
-          {
-            id: "a",
-            name: "horas_desde_criacao",
-            value: expr("{{ $now.diff($json.createdAt, 'hours').hours }}"),
-            type: "number",
-          },
+          { id: "a", name: "horas_criacao", value: expr("{{ $now.diff($json.date_created, 'hours').hours }}"), type: "number" },
+          { id: "b", name: "external_ref", value: expr("{{ $json.external_reference }}"), type: "string" },
+          { id: "c", name: "mp_payment_id", value: expr("{{ $json.id }}"), type: "string" },
         ],
       },
-    },
-    position: [840, 300],
-  },
-  output: [{ horas_desde_criacao: 0 }],
-});
-
-// --------------------------------------------------
-// Route by reminder stage
-// --------------------------------------------------
-
-const routeStage = switchCase({
-  version: 3.4,
-  config: {
-    name: "Estagio do Follow-up",
-    parameters: {
-      mode: "rules",
-      rules: {
-        values: [
-          {
-            conditions: {
-              combinator: "and",
-              options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-              conditions: [{ leftValue: expr("{{ $json.reminder_count }}"), rightValue: "0", operator: { type: "number", operation: "equals" } }],
-            },
-            renameOutput: true, outputKey: "Nunca lembrado",
-          },
-          {
-            conditions: {
-              combinator: "and",
-              options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-              conditions: [{ leftValue: expr("{{ $json.reminder_count }}"), rightValue: "1", operator: { type: "number", operation: "equals" } }],
-            },
-            renameOutput: true, outputKey: "ja lembrado 1x",
-          },
-          {
-            conditions: {
-              combinator: "and",
-              options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-              conditions: [{ leftValue: expr("{{ $json.reminder_count }}"), rightValue: "2", operator: { type: "number", operation: "equals" } }],
-            },
-            renameOutput: true, outputKey: "ja lembrado 2x",
-          },
-        ],
-      },
-      options: { fallbackOutput: "extra" },
     },
     position: [1140, 300],
   },
-  output: [{}, {}, {}, {}],
+  output: [{ horas_criacao: 0, external_ref: "", mp_payment_id: "" }],
 });
 
-// --------------------------------------------------
-// IF: minimum hours elapsed for this stage?
-// --------------------------------------------------
-
-const checkEligible = ifElse({
-  version: 2.3,
-  config: {
-    name: "Pode lembrar?",
-    parameters: {
-      conditions: {
-        combinator: "and",
-        options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-        conditions: [
-          {
-            leftValue: expr("{{ $json.horas_desde_criacao }}"),
-            rightValue: expr("{{ $json.reminder_count === 0 ? 4 : $json.reminder_count === 1 ? 24 : 48 }}"),
-            operator: { type: "number", operation: "largerEqual" },
-          },
-        ],
-      },
-    },
-    position: [1440, 300],
-  },
-  output: [{}, {}],
-});
-
-// --------------------------------------------------
-// SEND LEMBRETE
-// --------------------------------------------------
-
-const chooseMessage = switchCase({
+const stage = switchCase({
   version: 3.4,
   config: {
-    name: "Escolher Mensagem",
+    name: "Estagio",
     parameters: {
       mode: "rules",
       rules: {
@@ -183,43 +98,67 @@ const chooseMessage = switchCase({
             conditions: {
               combinator: "and",
               options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-              conditions: [{ leftValue: expr("{{ $json.reminder_count }}"), rightValue: "0", operator: { type: "number", operation: "equals" } }],
+              conditions: [{ leftValue: expr("{{ $json.horas_criacao }}"), rightValue: "24", operator: { type: "number", operation: "lesser" } }],
             },
-            renameOutput: true, outputKey: "1o lembrete",
+            renameOutput: true, outputKey: "4-24h",
           },
           {
             conditions: {
               combinator: "and",
               options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-              conditions: [{ leftValue: expr("{{ $json.reminder_count }}"), rightValue: "1", operator: { type: "number", operation: "equals" } }],
+              conditions: [{ leftValue: expr("{{ $json.horas_criacao }}"), rightValue: "48", operator: { type: "number", operation: "lesser" } }],
             },
-            renameOutput: true, outputKey: "2o lembrete",
+            renameOutput: true, outputKey: "24-48h",
           },
           {
             conditions: {
               combinator: "and",
               options: { caseSensitive: true, leftValue: "", typeValidation: "strict" },
-              conditions: [{ leftValue: expr("{{ $json.reminder_count }}"), rightValue: "2", operator: { type: "number", operation: "equals" } }],
+              conditions: [{ leftValue: expr("{{ $json.horas_criacao }}"), rightValue: "48", operator: { type: "number", operation: "largerEqual" } }],
             },
-            renameOutput: true, outputKey: "3o lembrete",
+            renameOutput: true, outputKey: "48h+",
           },
         ],
       },
       options: { fallbackOutput: "extra" },
     },
-    position: [1740, 200],
+    position: [1440, 200],
   },
   output: [{}, {}, {}, {}],
 });
 
-const msg1 = node({
+// ── Branch: 4-24h ──
+
+const checkReminder4h = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Ja lembrou 4h?",
+    parameters: {
+      resource: "row",
+      operation: "rowNotExists",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.mp_payment_id }}") },
+          { keyName: "reminder_sent_4h", condition: "eq", keyValue: true },
+        ],
+      },
+    },
+    position: [1740, 20],
+  },
+  output: [{ id: 0 }],
+});
+
+const msg4h = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "1o Lembrete (4h)",
+    name: "Lembrete 4h",
     parameters: {
       method: "POST",
-      url: placeholder("https://crm.seudominio.com/api/v1/messages"),
+      url: placeholder("https://wacrm.autofunil.com.br/api/v1/messages"),
       authentication: "genericCredentialType",
       genericAuthType: "httpBearerAuth",
       sendHeaders: true,
@@ -227,12 +166,7 @@ const msg1 = node({
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
-      jsonBody: expr(
-        '{\n' +
-        '  "to": "{{ $json.contact_phone }}",\n' +
-        '  "text": "Ola {{ $json.contact_name }}! 😊\\n\\nVi que voce iniciou a compra, mas ainda nao finalizou o pagamento.\\n\\nSeu link de pagamento esta disponivel. Qualquer duvida, estamos aqui!"\n' +
-        '}',
-      ),
+      jsonBody: expr('{\n  "to": "{{ $json.external_ref }}",\n  "text": "Ola! Vi que voce iniciou uma compra. O link de pagamento continua disponivel. 😊"\n}'),
       options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpBearerAuth: newCredential("WACRM API") },
@@ -242,14 +176,61 @@ const msg1 = node({
   output: [{ data: {} }],
 });
 
-const msg2 = node({
+const mark4h = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Marcar 4h",
+    parameters: {
+      resource: "row",
+      operation: "upsert",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.mp_payment_id }}") },
+        ],
+      },
+      columns: expr('{\n  "mappingMode": "defineBelow",\n  "value": [\n    { "column": "payment_id", "value": "{{ $json.mp_payment_id }}" },\n    { "column": "reminder_sent_4h", "value": true }\n  ]\n}'),
+    },
+    executeOnce: true,
+    position: [2340, 20],
+  },
+  output: [{ id: 0 }],
+});
+
+// ── Branch: 24-48h ──
+
+const checkReminder24h = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Ja lembrou 24h?",
+    parameters: {
+      resource: "row",
+      operation: "rowNotExists",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.mp_payment_id }}") },
+          { keyName: "reminder_sent_24h", condition: "eq", keyValue: true },
+        ],
+      },
+    },
+    position: [1740, 150],
+  },
+  output: [{ id: 0 }],
+});
+
+const msg24h = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "2o Lembrete (24h)",
+    name: "Lembrete 24h",
     parameters: {
       method: "POST",
-      url: placeholder("https://crm.seudominio.com/api/v1/messages"),
+      url: placeholder("https://wacrm.autofunil.com.br/api/v1/messages"),
       authentication: "genericCredentialType",
       genericAuthType: "httpBearerAuth",
       sendHeaders: true,
@@ -257,12 +238,7 @@ const msg2 = node({
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
-      jsonBody: expr(
-        '{\n' +
-        '  "to": "{{ $json.contact_phone }}",\n' +
-        '  "text": "Ola {{ $json.contact_name }}! \\n\\nAinda estamos aguardando seu pagamento. O link continua disponivel para voce finalizar.\\n\\nSe preferir, podemos ajudar com outra forma de pagamento. É so responder essa mensagem!"\n' +
-        '}',
-      ),
+      jsonBody: expr('{\n  "to": "{{ $json.external_ref }}",\n  "text": "Ainda estamos aguardando seu pagamento. O link continua disponivel para voce finalizar."\n}'),
       options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpBearerAuth: newCredential("WACRM API") },
@@ -272,14 +248,61 @@ const msg2 = node({
   output: [{ data: {} }],
 });
 
-const msg3 = node({
+const mark24h = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Marcar 24h",
+    parameters: {
+      resource: "row",
+      operation: "upsert",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.mp_payment_id }}") },
+        ],
+      },
+      columns: expr('{\n  "mappingMode": "defineBelow",\n  "value": [\n    { "column": "payment_id", "value": "{{ $json.mp_payment_id }}" },\n    { "column": "reminder_sent_24h", "value": true }\n  ]\n}'),
+    },
+    executeOnce: true,
+    position: [2340, 150],
+  },
+  output: [{ id: 0 }],
+});
+
+// ── Branch: 48h+ ──
+
+const checkReminder48h = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Ja lembrou 48h?",
+    parameters: {
+      resource: "row",
+      operation: "rowNotExists",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.mp_payment_id }}") },
+          { keyName: "reminder_sent_48h", condition: "eq", keyValue: true },
+        ],
+      },
+    },
+    position: [1740, 280],
+  },
+  output: [{ id: 0 }],
+});
+
+const msg48h = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
   config: {
-    name: "3o Lembrete (48h)",
+    name: "Lembrete 48h",
     parameters: {
       method: "POST",
-      url: placeholder("https://crm.seudominio.com/api/v1/messages"),
+      url: placeholder("https://wacrm.autofunil.com.br/api/v1/messages"),
       authentication: "genericCredentialType",
       genericAuthType: "httpBearerAuth",
       sendHeaders: true,
@@ -287,12 +310,7 @@ const msg3 = node({
       sendBody: true,
       contentType: "json",
       specifyBody: "json",
-      jsonBody: expr(
-        '{\n' +
-        '  "to": "{{ $json.contact_phone }}",\n' +
-        '  "text": "Ola {{ $json.contact_name }}! \\n\\nEste e um aviso importante: seu link de pagamento expirara em breve.\\n\\nAcesse agora para garantir sua compra: {{ $json.payment_url }}\\n\\nSe ja pagou, desconsidere esta mensagem."\n' +
-        '}',
-      ),
+      jsonBody: expr('{\n  "to": "{{ $json.external_ref }}",\n  "text": "Aviso: seu link de pagamento expirara em breve. Acesse agora para garantir sua compra!"\n}'),
       options: { timeout: 10000, response: { response: { responseFormat: "json" } } },
     },
     credentials: { httpBearerAuth: newCredential("WACRM API") },
@@ -302,59 +320,40 @@ const msg3 = node({
   output: [{ data: {} }],
 });
 
-const incrementReminder = node({
+const mark48h = node({
   type: "n8n-nodes-base.dataTable",
   version: 1.1,
   config: {
-    name: "Incrementar Contador",
+    name: "Marcar 48h",
     parameters: {
       resource: "row",
-      operation: "update",
+      operation: "upsert",
       dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
       matchType: "allConditions",
       filters: {
         conditions: [
-          { keyName: "id", condition: "eq", keyValue: expr("{{ $json.id }}") },
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.mp_payment_id }}") },
         ],
       },
-      columns: expr(
-        '{\n' +
-        '  "mappingMode": "defineBelow",\n' +
-        '  "value": [\n' +
-        '    { "column": "reminder_count", "value": "{{ $json.reminder_count + 1 }}" },\n' +
-        '    { "column": "last_checked_at", "value": "{{ $now.toISO() }}" }\n' +
-        '  ]\n' +
-        '}',
-      ),
+      columns: expr('{\n  "mappingMode": "defineBelow",\n  "value": [\n    { "column": "payment_id", "value": "{{ $json.mp_payment_id }}" },\n    { "column": "reminder_sent_48h", "value": true }\n  ]\n}'),
     },
-    alwaysOutputData: true,
-    position: [2040, 430],
+    executeOnce: true,
+    position: [2340, 280],
   },
-  output: [{ id: 1 }],
+  output: [{ id: 0 }],
 });
 
+const fim = node({ type: "n8n-nodes-base.noOp", version: 1, config: { name: "Aguardar" }, position: [1440, 400] });
+
 export default workflow("wacrm-followup", "WACRM - Follow-up de Vendas")
-  .add(sticky("## WACRM - Follow-up de Vendas\n\nExecuta a cada 1 hora. Regras:\n- **4h sem pagar** → 1o lembrete amigavel\n- **24h sem pagar** → 2o lembrete com oferta de ajuda\n- **48h sem pagar** → 3o lembrete com aviso de expiracao\n\nIncrementa `reminder_count` a cada envio."))
+  .add(sticky("## WACRM - Follow-up (c/ dedup)\n\nEnvia lembretes apenas UMA vez para cada estagio (4h, 24h, 48h).\nUsa a tabela wacrm_pagamentos para rastrear."))
   .add(schedule)
-  .to(fetchPending)
-  .to(calcHours)
-  .to(checkEligible
-    .onTrue(routeStage
-      .onCase(0, chooseMessage
-        .onCase(0, msg1.to(incrementReminder))
-        .onCase(1, msg2.to(incrementReminder))
-        .onCase(2, msg3.to(incrementReminder)),
-      )
-      .onCase(1, chooseMessage
-        .onCase(0, msg1.to(incrementReminder))
-        .onCase(1, msg2.to(incrementReminder))
-        .onCase(2, msg3.to(incrementReminder)),
-      )
-      .onCase(2, chooseMessage
-        .onCase(0, msg1.to(incrementReminder))
-        .onCase(1, msg2.to(incrementReminder))
-        .onCase(2, msg3.to(incrementReminder)),
-      ),
-    )
-    .onFalse(node({ type: "n8n-nodes-base.noOp", version: 1, config: { name: "Aguardar" }, position: [1740, 430] })),
+  .to(searchPending)
+  .to(checkPending
+    .onTrue(calcAge.to(stage
+      .onCase(0, checkReminder4h.onTrue(msg4h.to(mark4h)).onFalse(fim))
+      .onCase(1, checkReminder24h.onTrue(msg24h.to(mark24h)).onFalse(fim))
+      .onCase(2, checkReminder48h.onTrue(msg48h.to(mark48h)).onFalse(fim)),
+    ))
+    .onFalse(fim),
   );

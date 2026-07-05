@@ -11,13 +11,6 @@ import {
   newCredential,
 } from "@n8n/workflow-sdk";
 
-// ============================================================
-// WACRM - VERIFICADOR DE PAGAMENTOS (Mercado Pago)
-//
-// A cada 5 min, busca pagamentos aprovados no MP,
-// descobre o telefone via wacrm API e notifica o cliente.
-// ============================================================
-
 const schedule = trigger({
   type: "n8n-nodes-base.scheduleTrigger",
   version: 1.3,
@@ -49,10 +42,10 @@ const searchApproved = node({
     alwaysOutputData: true,
     position: [540, 300],
   },
-  output: [{ results: [{ id: 0, status: "approved", external_reference: "", date_approved: "" }], paging: { total: 0 } }],
+  output: [{ results: [{ id: 0, status: "approved", external_reference: "" }], paging: { total: 0 } }],
 });
 
-const checkResult = ifElse({
+const hasResults = ifElse({
   version: 2.3,
   config: {
     name: "Tem aprovados?",
@@ -79,6 +72,28 @@ const sibNode = splitInBatches({
   },
 });
 
+const checkNotified = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Ja notificado?",
+    parameters: {
+      resource: "row",
+      operation: "rowNotExists",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.id }}") },
+          { keyName: "notified_confirmed", condition: "eq", keyValue: "true" },
+        ],
+      },
+    },
+    position: [1440, 100],
+  },
+  output: [{ id: 0 }],
+});
+
 const fetchConversation = node({
   type: "n8n-nodes-base.httpRequest",
   version: 4.4,
@@ -86,7 +101,7 @@ const fetchConversation = node({
     name: "Buscar Conversa (API)",
     parameters: {
       method: "GET",
-      url: expr('https://wacrm.autofunil.com.br/api/v1/conversations/{{ $json.external_reference }}'),
+      url: expr('https://wacrm.autofunil.com.br/api/v1/conversations/{{ $("Buscar Aprovados").item.json.external_reference }}'),
       sendHeaders: true,
       headerParameters: { parameters: [{ name: "Content-Type", value: "application/json" }] },
       authentication: "genericCredentialType",
@@ -95,9 +110,9 @@ const fetchConversation = node({
     },
     credentials: { httpBearerAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [1440, 200],
+    position: [1740, 200],
   },
-  output: [{ data: { id: "", contact_id: "", status: "" } }],
+  output: [{ data: { id: "", contact_id: "" } }],
 });
 
 const fetchContact = node({
@@ -116,7 +131,7 @@ const fetchContact = node({
     },
     credentials: { httpBearerAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [1740, 200],
+    position: [2040, 200],
   },
   output: [{ data: { id: "", name: "", phone: "" } }],
 });
@@ -141,26 +156,44 @@ const notifyClient = node({
     },
     credentials: { httpBearerAuth: newCredential("WACRM API") },
     executeOnce: true,
-    position: [2040, 200],
+    position: [2340, 200],
   },
   output: [{ data: {} }],
 });
 
-const fim = node({ type: "n8n-nodes-base.noOp", version: 1, config: { name: "Aguardar" }, position: [1440, 400] });
+const markNotified = node({
+  type: "n8n-nodes-base.dataTable",
+  version: 1.1,
+  config: {
+    name: "Marcar como notificado",
+    parameters: {
+      resource: "row",
+      operation: "upsert",
+      dataTableId: { mode: "id", value: "2DKcXyjaEhczwgsA" },
+      matchType: "allConditions",
+      filters: {
+        conditions: [
+          { keyName: "payment_id", condition: "eq", keyValue: expr("{{ $json.id }}") },
+        ],
+      },
+      columns: expr('{ "mappingMode": "defineBelow", "value": [{ "column": "payment_id", "value": "{{ $json.id }}" }, { "column": "notified_confirmed", "value": "true" }, { "column": "status", "value": "confirmed" }] }'),
+    },
+    executeOnce: true,
+    position: [2640, 200],
+  },
+  output: [{ id: 0 }],
+});
+
+const fim = node({ type: "n8n-nodes-base.noOp", version: 1, config: { name: "Fim" }, position: [1440, 400] });
 
 export default workflow("wacrm-payment-checker", "WACRM - Verificador de Pagamentos")
-  .add(sticky("## WACRM - Verificador (Mercado Pago)\n\nA cada 5 min busca pagamentos com status=approved no MP.\nPara cada um, descobre o contato via wacrm API e notifica."))
+  .add(sticky("## Verificador (c/ dedup)\n\nSo notifica 1x. Usa tabela wacrm_pagamentos.notified_confirmed."))
   .add(schedule)
   .to(searchApproved)
-  .to(checkResult
+  .to(hasResults
     .onTrue(sibNode
       .onDone(fim)
-      .onEachBatch(
-        fetchConversation
-          .to(fetchContact)
-          .to(notifyClient)
-          .to(nextBatch(sibNode)),
-      ),
+      .onEachBatch(checkNotified.to(fetchConversation).to(fetchContact).to(notifyClient).to(markNotified).to(nextBatch(sibNode))),
     )
     .onFalse(fim),
   );
