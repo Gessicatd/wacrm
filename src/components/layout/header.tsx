@@ -17,24 +17,26 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { LanguageToggle } from "@/components/layout/language-toggle";
+import { useLanguage } from "@/hooks/use-language";
 
-const pageTitles: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/inbox": "Inbox",
-  "/notifications": "Notifications",
-  "/contacts": "Contacts",
-  "/pipelines": "Pipelines",
-  "/broadcasts": "Broadcasts",
-  "/automations": "Automations",
-  "/settings": "Settings",
+const pageTitleKeys: Record<string, string> = {
+  "/dashboard": "pageTitle.dashboard",
+  "/inbox": "pageTitle.inbox",
+  "/notifications": "pageTitle.notifications",
+  "/contacts": "pageTitle.contacts",
+  "/pipelines": "pageTitle.pipelines",
+  "/broadcasts": "pageTitle.broadcasts",
+  "/automations": "pageTitle.automations",
+  "/settings": "pageTitle.settings",
 };
 
-function getPageTitle(pathname: string): string {
-  if (pageTitles[pathname]) return pageTitles[pathname];
-  const match = Object.entries(pageTitles).find(([path]) =>
+function getPageTitleKey(pathname: string): string {
+  if (pageTitleKeys[pathname]) return pageTitleKeys[pathname];
+  const match = Object.entries(pageTitleKeys).find(([path]) =>
     pathname.startsWith(path),
   );
-  return match ? match[1] : "Dashboard";
+  return match ? match[1] : "pageTitle.dashboard";
 }
 
 interface HeaderProps {
@@ -46,7 +48,8 @@ interface HeaderProps {
 export function Header({ onOpenSidebar }: HeaderProps) {
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
-  const title = getPageTitle(pathname);
+  const { t } = useLanguage();
+  const title = t(getPageTitleKey(pathname));
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -71,6 +74,7 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-1 sm:gap-2">
+        <LanguageToggle />
         <ModeToggle />
 
         <DropdownMenu>

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { LanguageProvider } from "@/hooks/use-language";
 import { ThemedToaster } from "@/components/themed-toaster";
 import {
   DEFAULT_MODE,
@@ -53,6 +54,19 @@ export const viewport: Viewport = {
 // browser can run as a single <script>. Knowledge of valid ids is
 // sourced from the THEME_IDS / MODES constants so adding one doesn't
 // silently break the boot path.
+const LANG_BOOT_SCRIPT = `
+(function(){
+  var d = document.documentElement;
+  try {
+    var val = localStorage.getItem('wacrm-language');
+    if (val === 'pt' || val === 'es' || val === 'en') {
+      d.setAttribute('data-language', val);
+      d.lang = val === 'pt' ? 'pt-BR' : val;
+    }
+  } catch(_e) {}
+})();
+`;
+
 const THEME_BOOT_SCRIPT = `
 (function(){
   var d = document.documentElement;
@@ -97,6 +111,11 @@ export default function RootLayout({
     >
       <head>
         <Script
+          id="lang-boot"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: LANG_BOOT_SCRIPT }}
+        />
+        <Script
           id="theme-boot"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
@@ -104,8 +123,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
         <ThemeProvider>
-          {children}
-          <ThemedToaster />
+          <LanguageProvider>
+            {children}
+            <ThemedToaster />
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>
