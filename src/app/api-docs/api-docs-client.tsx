@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Lang } from './translations';
 import t from './translations';
 import { CopyButton } from './copy-button';
@@ -24,6 +24,41 @@ const LANG_OPTIONS: { value: Lang; label: string; flag: string }[] = [
   { value: 'en', label: 'English', flag: '🇺🇸' },
 ];
 
+type NavId =
+  | 'auth'
+  | 'scopes'
+  | 'envelope'
+  | 'rate-limits'
+  | 'pagination'
+  | 'webhooks'
+  | 'roadmap'
+  | `endpoint-${number}`;
+
+interface NavEntry {
+  id: NavId;
+  labelKey: string;
+  method?: string;
+  path?: string;
+}
+
+const introNav: NavEntry[] = [
+  { id: 'auth', labelKey: 'authTitle' },
+  { id: 'scopes', labelKey: 'scopesTitle' },
+  { id: 'envelope', labelKey: 'envelopeTitle' },
+  { id: 'rate-limits', labelKey: 'rateLimitTitle' },
+  { id: 'pagination', labelKey: 'paginationTitle' },
+  { id: 'webhooks', labelKey: 'webhooksTitle' },
+  { id: 'roadmap', labelKey: 'roadmapTitle' },
+];
+
+function methodColor(m: string): string {
+  if (m === 'GET') return 'text-green-600 dark:text-green-400';
+  if (m === 'POST') return 'text-blue-600 dark:text-blue-400';
+  if (m.includes('PATCH') || m.includes('PUT')) return 'text-orange-600 dark:text-orange-400';
+  if (m.includes('DELETE')) return 'text-red-600 dark:text-red-400';
+  return 'text-muted-foreground';
+}
+
 function CodeBlock({ content, copyLabel, copiedLabel }: { content: string; copyLabel?: string; copiedLabel?: string }) {
   return (
     <div className="group relative">
@@ -33,30 +68,6 @@ function CodeBlock({ content, copyLabel, copiedLabel }: { content: string; copyL
       <div className="absolute right-2 top-2 opacity-0 transition-opacity group-hover:opacity-100">
         <CopyButton content={content} label={copyLabel} copiedLabel={copiedLabel} />
       </div>
-    </div>
-  );
-}
-
-interface SectionProps {
-  title: string;
-  children: React.ReactNode;
-  id?: string;
-}
-
-function Section({ title, children, id }: SectionProps) {
-  return (
-    <section id={id} className="mb-10 scroll-mt-20">
-      <h2 className="mb-4 text-2xl font-bold tracking-tight text-foreground">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-6">
-      <h3 className="mb-3 text-lg font-semibold text-foreground">{title}</h3>
-      {children}
     </div>
   );
 }
@@ -88,58 +99,62 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
   );
 }
 
-function EndpointCard({ ep, lang, copyLabel, copiedLabel }: { ep: typeof endpoints[number]; lang: Lang; copyLabel: string; copiedLabel: string }) {
+function methodBadge(m: string, small?: boolean) {
+  const cls = small ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-0.5 text-xs';
+  return (
+    <span className={`inline-block shrink-0 rounded-md font-bold ${cls} ${
+      m === 'GET' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
+      m === 'POST' ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400' :
+      m.includes('PATCH') || m.includes('PUT') ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400' :
+      m.includes('DELETE') ? 'bg-red-500/15 text-red-600 dark:text-red-400' :
+      'bg-muted text-muted-foreground'
+    }`}>
+      {m}
+    </span>
+  );
+}
+
+function EndpointView({ ep, lang, copyLabel, copiedLabel }: { ep: typeof endpoints[number]; lang: Lang; copyLabel: string; copiedLabel: string }) {
   const desc = ep.description[lang] || ep.description.en;
   return (
-    <div className="mb-6 rounded-xl border border-border bg-card p-5">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         {ep.method.split(' / ').map((m) => (
-          <span
-            key={m}
-            className={`rounded-md px-2 py-0.5 text-xs font-bold ${
-              m === 'GET' ? 'bg-green-500/15 text-green-600 dark:text-green-400' :
-              m === 'POST' ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400' :
-              m === 'PATCH' || m === 'PUT' ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400' :
-              m === 'DELETE' ? 'bg-red-500/15 text-red-600 dark:text-red-400' :
-              'bg-muted text-muted-foreground'
-            }`}
-          >
-            {m}
-          </span>
+          <span key={m}>{methodBadge(m)}</span>
         ))}
-        <code className="text-sm font-semibold text-foreground">{ep.path}</code>
+        <code className="text-lg font-semibold text-foreground">{ep.path}</code>
       </div>
 
       {ep.scopes.length > 0 && (
-        <p className="mb-2 text-xs text-muted-foreground">
-          Scope: <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs">{ep.scopes.join(', ')}</code>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Scope: <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{ep.scopes.join(', ')}</code>
         </p>
       )}
 
-      <p className="mb-3 text-sm leading-relaxed text-muted-foreground">{desc}</p>
+      <p className="mb-4 text-sm leading-relaxed text-muted-foreground">{desc}</p>
 
       {ep.details && ep.details.length > 0 && (
-        <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+        <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           {ep.details.map((d, i) => <li key={i}>{d}</li>)}
         </ul>
       )}
 
       {ep.notes && ep.notes.length > 0 && (
-        <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
           {ep.notes.map((n, i) => <p key={i}>{n}</p>)}
         </div>
       )}
 
       {ep.curl && (
-        <div className="mb-2">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">curl</p>
+        <div className="mb-4">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">curl</p>
           <CodeBlock content={ep.curl} copyLabel={copyLabel} copiedLabel={copiedLabel} />
         </div>
       )}
 
       {ep.json && (
         <div>
-          <p className="mb-1 text-xs font-medium text-muted-foreground">Response</p>
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Response</p>
           <CodeBlock content={ep.json} copyLabel={copyLabel} copiedLabel={copiedLabel} />
         </div>
       )}
@@ -149,158 +164,267 @@ function EndpointCard({ ep, lang, copyLabel, copiedLabel }: { ep: typeof endpoin
 
 export function ApiDocsClient() {
   const [lang, setLang] = useState<Lang>('pt');
+  const [activeNav, setActiveNav] = useState<NavId>('auth');
   const tr = t[lang];
 
+  const endpointNav: NavEntry[] = useMemo(() =>
+    endpoints.map((ep, i) => ({
+      id: `endpoint-${i}` as NavId,
+      labelKey: ep.path,
+      method: ep.method.split(' / ')[0],
+      path: ep.path,
+    })),
+  []);
+
+  function renderContent() {
+    if (activeNav.startsWith('endpoint-')) {
+      const idx = parseInt(activeNav.replace('endpoint-', ''), 10);
+      const ep = endpoints[idx];
+      if (!ep) return null;
+      return (
+        <EndpointView
+          ep={ep}
+          lang={lang}
+          copyLabel={tr.copyLabel}
+          copiedLabel={tr.copiedLabel}
+        />
+      );
+    }
+
+    switch (activeNav) {
+      case 'auth':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.authTitle}</h2>
+            <p className="mb-3 text-sm leading-relaxed text-muted-foreground">{tr.authDesc}</p>
+            <div className="mb-3">
+              <CodeBlock content="Authorization: Bearer wacrm_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
+            </div>
+            <p className="mb-4 text-sm text-muted-foreground">{tr.authKeyDesc}</p>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">{tr.authCreatingTitle}</h3>
+            <ol className="mb-4 list-inside list-decimal space-y-1 text-sm text-muted-foreground">
+              {authSteps.map(([num, text]) => (
+                <li key={num}>{text}</li>
+              ))}
+            </ol>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">{tr.authRevokingTitle}</h3>
+            <p className="text-sm text-muted-foreground">{tr.authRevokingDesc}</p>
+          </div>
+        );
+
+      case 'scopes':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.scopesTitle}</h2>
+            <p className="mb-3 text-sm text-muted-foreground">{tr.scopesDesc}</p>
+            <Table headers={[tr.scopesHeaderScope, tr.scopesHeaderAllows]} rows={scopeRows} />
+            <p className="mt-3 text-sm text-muted-foreground">{tr.scopesNoScopes}</p>
+          </div>
+        );
+
+      case 'envelope':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.envelopeTitle}</h2>
+            <p className="mb-3 text-sm text-muted-foreground">{tr.envelopeDesc}</p>
+            <div className="mb-3 space-y-2">
+              <CodeBlock content={successEnvelope} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
+              <CodeBlock content={errorEnvelope} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
+            </div>
+            <Table headers={['Status', tr.envelopeCode, tr.envelopeMeaning]} rows={statusCodes} />
+          </div>
+        );
+
+      case 'rate-limits':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.rateLimitTitle}</h2>
+            <p className="mb-3 text-sm text-muted-foreground">{tr.rateLimitDesc}</p>
+            <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+              <li>Retry-After — seconds until the window resets</li>
+              <li>X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset</li>
+            </ul>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <p>{tr.rateLimitNote}</p>
+            </div>
+          </div>
+        );
+
+      case 'pagination':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.paginationTitle}</h2>
+            <p className="mb-3 text-sm text-muted-foreground">{tr.paginationDesc}</p>
+            <CodeBlock content={paginationExample} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
+            <p className="mt-3 text-sm text-muted-foreground">{tr.paginationCursors}</p>
+          </div>
+        );
+
+      case 'webhooks':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.webhooksTitle}</h2>
+            <p className="mb-3 text-sm text-muted-foreground">{tr.webhooksDesc}</p>
+            <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
+              <p>{tr.webhooksMigration}</p>
+            </div>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">{tr.webhooksEventsTitle}</h3>
+            <Table headers={[tr.webhooksEventsHeaderEvent, tr.webhooksEventsHeaderFires]} rows={webhookEvents} />
+            <h3 className="mb-3 mt-6 text-lg font-semibold text-foreground">{tr.webhooksManageTitle}</h3>
+            <p className="mb-2 text-sm text-muted-foreground">All under scope webhooks:manage.</p>
+            <div className="mb-6 overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Method & Path</th>
+                    <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webhookManageSteps.map(([method, desc], i) => (
+                    <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
+                      <td className="px-4 py-2.5 font-mono text-sm text-foreground">{method}</td>
+                      <td className="px-4 py-2.5 text-sm text-muted-foreground">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">{tr.webhooksDeliveryTitle}</h3>
+            <p className="mb-2 text-sm text-muted-foreground">{tr.webhooksDeliveryDesc}</p>
+            <CodeBlock content={deliveryPayload} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
+            <p className="mb-6 mt-2 text-sm text-muted-foreground">
+              Headers: <code className="rounded bg-muted px-1 font-mono">X-Wacrm-Event</code>,{' '}
+              <code className="rounded bg-muted px-1 font-mono">X-Wacrm-Webhook-Id</code>,{' '}
+              <code className="rounded bg-muted px-1 font-mono">X-Wacrm-Signature</code>.
+            </p>
+            <h3 className="mb-3 text-lg font-semibold text-foreground">{tr.webhooksVerifyTitle}</h3>
+            <p className="mb-2 text-sm text-muted-foreground">
+              {'X-Wacrm-Signature: t=&lt;unix_seconds&gt;,v1=&lt;hex&gt; where v1 = HMAC-SHA256(secret, "${t}.${rawBody}"). Recompute over the raw request body and compare in constant time.'}
+            </p>
+            <CodeBlock content={verifyExample} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
+            <h3 className="mb-3 mt-6 text-lg font-semibold text-foreground">{tr.webhooksSemanticsTitle}</h3>
+            <p className="mb-3 text-sm leading-relaxed text-muted-foreground">{tr.webhooksSemanticsBestEffort}</p>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+              <p>{tr.webhooksSemanticsTargetRestrictions}</p>
+            </div>
+          </div>
+        );
+
+      case 'roadmap':
+        return (
+          <div>
+            <h2 className="mb-4 text-2xl font-bold text-foreground">{tr.roadmapTitle}</h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">{tr.roadmapDesc}</p>
+          </div>
+        );
+
+      default:
+        return null;
+    }
+  }
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 lg:px-8">
-      {/* Language selector */}
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">{tr.pageTitle}</h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{tr.pageSubtitle}</p>
-        </div>
-        <div className="ml-6 shrink-0">
+    <div className="mx-auto flex min-h-screen max-w-7xl flex-col">
+      {/* Top bar */}
+      <header className="flex items-center justify-between border-b border-border bg-background px-4 py-3 sm:px-6">
+        <h1 className="text-lg font-bold text-foreground sm:text-xl">{tr.pageTitle}</h1>
+        <select
+          value={lang}
+          onChange={(e) => setLang(e.target.value as Lang)}
+          className="h-8 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+          aria-label={tr.languageLabel}
+        >
+          {LANG_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.flag} {opt.label}
+            </option>
+          ))}
+        </select>
+      </header>
+
+      <div className="flex flex-1">
+        {/* Sidebar */}
+        <nav className="hidden w-64 shrink-0 border-r border-border bg-card p-3 lg:block overflow-y-auto">
+          <div className="mb-3">
+            <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Introduction
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {introNav.map((item) => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => setActiveNav(item.id)}
+                    className={`w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                      activeNav === item.id
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {tr[item.labelKey as keyof typeof tr] as string}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {tr.endpointsTitle}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {endpointNav.map((item) => (
+                <li key={item.id}>
+                  <button
+                    onClick={() => setActiveNav(item.id)}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+                      activeNav === item.id
+                        ? 'bg-primary/10 text-primary font-medium'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    {item.method && (
+                      <span className={`shrink-0 text-[10px] font-bold ${methodColor(item.method)}`}>
+                        {item.method}
+                      </span>
+                    )}
+                    <span className="truncate font-mono text-xs">{item.path}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </nav>
+
+        {/* Mobile nav tabs */}
+        <div className="flex flex-col lg:hidden">
           <select
-            value={lang}
-            onChange={(e) => setLang(e.target.value as Lang)}
-            className="h-9 rounded-lg border border-border bg-muted px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            aria-label={tr.languageLabel}
+            value={activeNav}
+            onChange={(e) => setActiveNav(e.target.value as NavId)}
+            className="mx-3 mt-3 h-9 rounded-lg border border-border bg-muted px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
           >
-            {LANG_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.flag} {opt.label}
-              </option>
-            ))}
+            <optgroup label="Introduction">
+              {introNav.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {tr[item.labelKey as keyof typeof tr] as string}
+                </option>
+              ))}
+            </optgroup>
+            <optgroup label={tr.endpointsTitle}>
+              {endpointNav.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.method} {item.path}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+          {renderContent()}
+        </main>
       </div>
-
-      {/* Authentication */}
-      <Section title={tr.authTitle} id="authentication">
-        <p className="mb-3 text-sm leading-relaxed text-muted-foreground">{tr.authDesc}</p>
-        <div className="mb-3">
-          <CodeBlock content="Authorization: Bearer wacrm_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-        </div>
-        <p className="mb-4 text-sm text-muted-foreground">{tr.authKeyDesc}</p>
-
-        <SubSection title={tr.authCreatingTitle}>
-          <ol className="list-inside list-decimal space-y-1 text-sm text-muted-foreground">
-            {authSteps.map(([num, text]) => (
-              <li key={num}>{text}</li>
-            ))}
-          </ol>
-        </SubSection>
-
-        <SubSection title={tr.authRevokingTitle}>
-          <p className="text-sm text-muted-foreground">{tr.authRevokingDesc}</p>
-        </SubSection>
-      </Section>
-
-      {/* Scopes */}
-      <Section title={tr.scopesTitle} id="scopes">
-        <p className="mb-3 text-sm text-muted-foreground">{tr.scopesDesc}</p>
-        <Table headers={[tr.scopesHeaderScope, tr.scopesHeaderAllows]} rows={scopeRows} />
-        <p className="mt-3 text-sm text-muted-foreground">{tr.scopesNoScopes}</p>
-      </Section>
-
-      {/* Response envelope */}
-      <Section title={tr.envelopeTitle} id="envelope">
-        <p className="mb-3 text-sm text-muted-foreground">{tr.envelopeDesc}</p>
-        <div className="mb-3 space-y-2">
-          <CodeBlock content={successEnvelope} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-          <CodeBlock content={errorEnvelope} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-        </div>
-        <Table headers={['Status', tr.envelopeCode, tr.envelopeMeaning]} rows={statusCodes} />
-      </Section>
-
-      {/* Rate limits */}
-      <Section title={tr.rateLimitTitle} id="rate-limits">
-        <p className="mb-3 text-sm text-muted-foreground">{tr.rateLimitDesc}</p>
-        <ul className="mb-3 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
-          <li>Retry-After — seconds until the window resets</li>
-          <li>X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset</li>
-        </ul>
-        <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-          <p>{tr.rateLimitNote}</p>
-        </div>
-      </Section>
-
-      {/* Endpoints */}
-      <Section title={tr.endpointsTitle} id="endpoints">
-        {endpoints.map((ep, i) => (
-          <EndpointCard key={i} ep={ep} lang={lang} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-        ))}
-      </Section>
-
-      {/* Pagination */}
-      <Section title={tr.paginationTitle} id="pagination">
-        <p className="mb-3 text-sm text-muted-foreground">{tr.paginationDesc}</p>
-        <CodeBlock content={paginationExample} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-        <p className="mt-3 text-sm text-muted-foreground">{tr.paginationCursors}</p>
-      </Section>
-
-      {/* Webhooks */}
-      <Section title={tr.webhooksTitle} id="webhooks">
-        <p className="mb-3 text-sm text-muted-foreground">{tr.webhooksDesc}</p>
-        <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
-          <p>{tr.webhooksMigration}</p>
-        </div>
-
-        <SubSection title={tr.webhooksEventsTitle}>
-          <Table headers={[tr.webhooksEventsHeaderEvent, tr.webhooksEventsHeaderFires]} rows={webhookEvents} />
-        </SubSection>
-
-        <SubSection title={tr.webhooksManageTitle}>
-          <p className="mb-2 text-sm text-muted-foreground">All under scope webhooks:manage.</p>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Method & Path</th>
-                  <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {webhookManageSteps.map(([method, desc], i) => (
-                  <tr key={i} className="border-b border-border/50 last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-2.5 font-mono text-sm text-foreground">{method}</td>
-                    <td className="px-4 py-2.5 text-sm text-muted-foreground">{desc}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SubSection>
-
-        <SubSection title={tr.webhooksDeliveryTitle}>
-          <p className="mb-2 text-sm text-muted-foreground">{tr.webhooksDeliveryDesc}</p>
-          <CodeBlock content={deliveryPayload} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-          <p className="mt-2 text-sm text-muted-foreground">
-            Headers: <code className="rounded bg-muted px-1 font-mono">X-Wacrm-Event</code>,{' '}
-            <code className="rounded bg-muted px-1 font-mono">X-Wacrm-Webhook-Id</code>,{' '}
-            <code className="rounded bg-muted px-1 font-mono">X-Wacrm-Signature</code>.
-          </p>
-        </SubSection>
-
-        <SubSection title={tr.webhooksVerifyTitle}>
-          <p className="mb-2 text-sm text-muted-foreground">
-            X-Wacrm-Signature: t=&lt;unix_seconds&gt;,v1=&lt;hex&gt; where v1 = HMAC-SHA256(secret, &quot;{'${t}.${rawBody}'}&quot;). Recompute over the raw request body and compare in constant time.
-          </p>
-          <CodeBlock content={verifyExample} copyLabel={tr.copyLabel} copiedLabel={tr.copiedLabel} />
-        </SubSection>
-
-        <SubSection title={tr.webhooksSemanticsTitle}>
-          <p className="mb-3 text-sm leading-relaxed text-muted-foreground">{tr.webhooksSemanticsBestEffort}</p>
-          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
-            <p>{tr.webhooksSemanticsTargetRestrictions}</p>
-          </div>
-        </SubSection>
-      </Section>
-
-      {/* Roadmap */}
-      <Section title={tr.roadmapTitle} id="roadmap">
-        <p className="text-sm leading-relaxed text-muted-foreground">{tr.roadmapDesc}</p>
-      </Section>
     </div>
   );
 }

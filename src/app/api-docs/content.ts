@@ -88,6 +88,8 @@ const contactsList: EndpointDoc = {
     es: 'Lista contactos, del más reciente primero. Paginado. Filtros opcionales: ?search= (nombre o teléfono) y ?tag=<tagId>.',
     en: 'List contacts, newest first. Paginated. Optional filters: ?search= (matches name or phone) and ?tag=<tagId>.',
   },
+  curl: `curl https://your-crm.example.com/api/v1/contacts?limit=50 \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
   json: `{
   "data": [
     {
@@ -110,6 +112,32 @@ const contactsCreate: EndpointDoc = {
     es: 'Crea un contacto. phone (E.164) es obligatorio; name, email, company y tags (array de nombres de etiquetas) son opcionales. Find-or-create por teléfono: una coincidencia existente devuelve 200; un nuevo contacto devuelve 201.',
     en: 'Create a contact. phone (E.164) is required; name, email, company, and tags (an array of tag names) are optional. Find-or-create by phone: an existing match returns 200; a new contact returns 201.',
   },
+  curl: `curl -X POST https://your-crm.example.com/api/v1/contacts \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+        "phone": "+14155550123",
+        "name": "Jane Doe",
+        "email": "jane@acme.com",
+        "company": "Acme Inc",
+        "tags": ["vip", "lead"]
+      }'`,
+  json: `{
+  "data": {
+    "id": "...",
+    "phone": "+14155550123",
+    "name": "Jane Doe",
+    "email": "jane@acme.com",
+    "company": "Acme Inc",
+    "avatar_url": null,
+    "tags": [
+      { "id": "...", "name": "vip", "color": "#f59e0b" },
+      { "id": "...", "name": "lead", "color": "#3b82f6" }
+    ],
+    "created_at": "...",
+    "updated_at": "..."
+  }
+}`,
 };
 
 const contactsDetail: EndpointDoc = {
@@ -121,6 +149,15 @@ const contactsDetail: EndpointDoc = {
     es: 'Leer o actualizar un contacto. PATCH actualiza solo los campos enviados (name, email, company). Pase tags (array) para reemplazar las etiquetas del contacto. Un contacto de otra cuenta devuelve 404.',
     en: 'Read or update one contact. PATCH updates only the fields you send (name, email, company). Pass tags (an array) to replace the contact\'s tags. A contact in another account returns 404.',
   },
+  curl: `# Read
+curl https://your-crm.example.com/api/v1/contacts/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"
+
+# Update
+curl -X PATCH https://your-crm.example.com/api/v1/contacts/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "name": "Jane Updated", "company": "Acme Corp", "tags": ["vip"] }'`,
 };
 
 const conversationsList: EndpointDoc = {
@@ -132,6 +169,21 @@ const conversationsList: EndpointDoc = {
     es: 'Lista conversaciones, de la más reciente primero. Paginado. Filtros opcionales: ?status= (open / pending / closed) y ?contact_id=. Cada conversación incluye su contacto + etiquetas.',
     en: 'List conversations, newest first. Paginated. Optional filters: ?status= (open / pending / closed) and ?contact_id=. Each conversation embeds its contact + tags.',
   },
+  curl: `curl https://your-crm.example.com/api/v1/conversations?status=open&limit=50 \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+  json: `{
+  "data": [
+    {
+      "id": "...",
+      "status": "open",
+      "contact": { "id": "...", "phone": "+14155550123", "name": "Jane Doe" },
+      "tags": [{ "id": "...", "name": "vip", "color": "#f59e0b" }],
+      "last_message_at": "...",
+      "created_at": "..."
+    }
+  ],
+  "meta": { "next_cursor": "..." }
+}`,
 };
 
 const conversationsDetail: EndpointDoc = {
@@ -143,6 +195,8 @@ const conversationsDetail: EndpointDoc = {
     es: 'Leer una conversación. 404 si pertenece a otra cuenta.',
     en: 'Read one conversation. 404 if it belongs to another account.',
   },
+  curl: `curl https://your-crm.example.com/api/v1/conversations/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
 };
 
 const conversationsMessages: EndpointDoc = {
@@ -154,6 +208,22 @@ const conversationsMessages: EndpointDoc = {
     es: 'Lista los mensajes de una conversación, del más reciente primero. Paginado. Cada mensaje incluye direction (inbound / outbound), status, whatsapp_message_id y content_*. La conversación se verifica como perteneciente a su cuenta primero (404 en caso contrario).',
     en: 'List a conversation\'s messages, newest first. Paginated. Each message includes its direction (inbound / outbound), status (delivery state), whatsapp_message_id, and content_*. The conversation is verified to belong to your account first (404 otherwise).',
   },
+  curl: `curl https://your-crm.example.com/api/v1/conversations/{id}/messages?limit=50 \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+  json: `{
+  "data": [
+    {
+      "id": "...",
+      "direction": "inbound",
+      "status": "delivered",
+      "whatsapp_message_id": "wamid....",
+      "content_type": "text",
+      "text": "Hi, I have a question about my order",
+      "created_at": "..."
+    }
+  ],
+  "meta": { "next_cursor": "..." }
+}`,
 };
 
 const broadcastsCreate: EndpointDoc = {
@@ -198,6 +268,22 @@ const broadcastsDetail: EndpointDoc = {
     es: 'Estado del broadcast + contadores. status pasa de sending → sent; delivered_count / read_count suben a medida que llegan los webhooks de entrega de Meta. 404 para broadcast de otra cuenta.',
     en: 'Broadcast status + counts. status moves sending → sent; delivered_count / read_count keep climbing as Meta delivery webhooks arrive. 404 for another account\'s broadcast.',
   },
+  curl: `curl https://your-crm.example.com/api/v1/broadcasts/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+  json: `{
+  "data": {
+    "id": "...",
+    "name": "July promo",
+    "status": "sent",
+    "total_recipients": 2,
+    "sent_count": 2,
+    "delivered_count": 2,
+    "read_count": 1,
+    "replied_count": 0,
+    "failed_count": 0,
+    "created_at": "..."
+  }
+}`,
 };
 
 const pipelinesList: EndpointDoc = {
@@ -264,6 +350,19 @@ const pipelinesDetail: EndpointDoc = {
     es: 'Leer, actualizar o eliminar un pipeline. PATCH acepta { "name": "..." }. DELETE propaga a etapas y deals (todos los deals en el pipeline se eliminan). Devuelve 404 para pipelines de otra cuenta.',
     en: 'Read, update, or delete a pipeline. PATCH accepts { "name": "..." }. DELETE cascades to stages and deals (all deals in the pipeline are removed). Returns 404 for pipelines in another account.',
   },
+  curl: `# Read
+curl https://your-crm.example.com/api/v1/pipelines/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"
+
+# Rename
+curl -X PATCH https://your-crm.example.com/api/v1/pipelines/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "name": "New Pipeline Name" }'
+
+# Delete (cascades to stages & deals)
+curl -X DELETE https://your-crm.example.com/api/v1/pipelines/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
 };
 
 const pipelinesStages: EndpointDoc = {
@@ -295,6 +394,15 @@ const stagesDetail: EndpointDoc = {
     es: 'Actualizar o eliminar una etapa. PATCH acepta name, position, color. DELETE es rechazado si la etapa aún contiene deals — mueva o elimine los deals primero. Devuelve 404 para etapas de otra cuenta.',
     en: 'Update or delete a stage. PATCH accepts name, position, color. DELETE is refused if the stage still contains deals — move or delete them first. Returns 404 for stages in another account.',
   },
+  curl: `# Rename / reorder
+curl -X PATCH https://your-crm.example.com/api/v1/stages/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "name": "Proposal", "position": 2, "color": "#10b981" }'
+
+# Delete (fails if deals exist in this stage)
+curl -X DELETE https://your-crm.example.com/api/v1/stages/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
 };
 
 const dealsList: EndpointDoc = {
@@ -306,6 +414,8 @@ const dealsList: EndpointDoc = {
     es: 'Lista deals, del más reciente primero. Paginado. Filtros opcionales: ?pipeline_id=, ?stage_id=, ?status= (open / won / lost), ?contact_id=, ?assigned_to=.',
     en: 'List deals, newest first. Paginated. Optional filters: ?pipeline_id=, ?stage_id=, ?status= (open / won / lost), ?contact_id=, ?assigned_to=.',
   },
+  curl: `curl https://your-crm.example.com/api/v1/deals?pipeline_id={id}&status=open&limit=50 \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
   json: `{
   "data": [
     {
@@ -358,6 +468,23 @@ const dealsDetail: EndpointDoc = {
     es: 'Leer, actualizar o eliminar un deal. PATCH acepta actualizaciones parciales en cualquier campo (title, value, currency, notes, expected_close_date, assigned_to, conversation_id, pipeline_id, stage_id, contact_id). DELETE elimina el deal permanentemente.',
     en: 'Read, update, or delete a single deal. PATCH accepts partial updates on any deal field (title, value, currency, notes, expected_close_date, assigned_to, conversation_id, pipeline_id, stage_id, contact_id). DELETE removes the deal permanently.',
   },
+  curl: `# Read a deal
+curl https://your-crm.example.com/api/v1/deals/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"
+
+# Update deal fields
+curl -X PATCH https://your-crm.example.com/api/v1/deals/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+        "title": "Updated Project Name",
+        "value": 25000.00,
+        "stage_id": "new-stage-uuid"
+      }'
+
+# Delete a deal
+curl -X DELETE https://your-crm.example.com/api/v1/deals/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
 };
 
 const dealsMove: EndpointDoc = {
@@ -423,6 +550,19 @@ const webhooksDetail: EndpointDoc = {
     es: 'Leer, actualizar o eliminar un webhook. PATCH actualiza url, events o is_active (reactivar limpia el contador de fallos). DELETE elimina permanentemente.',
     en: 'Read, update, or delete a webhook. PATCH updates url, events, or is_active (re-enabling clears the failure counter). DELETE removes permanently.',
   },
+  curl: `# Read
+curl https://your-crm.example.com/api/v1/webhooks/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"
+
+# Update
+curl -X PATCH https://your-crm.example.com/api/v1/webhooks/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "url": "https://example.com/new-hooks/wacrm", "events": ["message.received", "conversation.created"] }'
+
+# Delete
+curl -X DELETE https://your-crm.example.com/api/v1/webhooks/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
 };
 
 export const endpoints: EndpointDoc[] = [
