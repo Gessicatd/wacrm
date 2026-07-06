@@ -41,15 +41,19 @@ key's next request. Revoked keys stay in the list as an audit trail.
 A key can do only what its scopes allow — independent of who created
 it. Grant the minimum.
 
-| Scope                | Allows                                   |
-| -------------------- | ---------------------------------------- |
-| `messages:send`      | Send WhatsApp messages                   |
-| `messages:read`      | Read messages and delivery status        |
-| `contacts:read`      | List and read contacts                   |
-| `contacts:write`     | Create and update contacts               |
-| `conversations:read` | List and read conversations              |
-| `broadcasts:send`    | Launch broadcast campaigns               |
-| `webhooks:manage`    | Register and manage outbound webhooks    |
+| Scope                | Allows                                           |
+| -------------------- | ------------------------------------------------ |
+| `messages:send`      | Send WhatsApp messages                           |
+| `messages:read`      | Read messages and delivery status                |
+| `contacts:read`      | List and read contacts                           |
+| `contacts:write`     | Create and update contacts                       |
+| `conversations:read` | List and read conversations                      |
+| `broadcasts:send`    | Launch broadcast campaigns                       |
+| `webhooks:manage`    | Register and manage outbound event webhooks      |
+| `pipelines:read`     | List and read pipelines and stages               |
+| `pipelines:write`    | Create, update, and delete pipelines and stages  |
+| `deals:read`         | List and read deals                              |
+| `deals:write`        | Create, update, delete deals, move, change status |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -263,6 +267,194 @@ Broadcast status + counts. Scope: `broadcasts:send`. `status` moves
 `sending` → `sent`; `delivered_count` / `read_count` keep climbing as
 Meta delivery webhooks arrive. `404` for another account's broadcast.
 
+### `GET /api/v1/pipelines`
+
+List all pipelines with their stages, ordered by creation. Scope:
+`pipelines:read`.
+
+```bash
+curl https://your-crm.example.com/api/v1/pipelines \
+  -H "Authorization: Bearer wacrm_live_xxx"
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "…",
+      "name": "Sales Pipeline",
+      "stages": [
+        { "id": "…", "name": "Lead", "position": 0, "color": "#3b82f6", "created_at": "…" },
+        { "id": "…", "name": "Qualified", "position": 1, "color": "#8b5cf6", "created_at": "…" }
+      ],
+      "created_at": "…"
+    }
+  ],
+  "meta": { "next_cursor": null }
+}
+```
+
+### `POST /api/v1/pipelines`
+
+Create a new pipeline. Scope: `pipelines:write`. Optionally include
+`stages` — an array of `{ name, position?, color? }`.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/pipelines \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "name": "Sales Pipeline",
+        "stages": [
+          { "name": "Lead", "color": "#3b82f6" },
+          { "name": "Qualified", "color": "#8b5cf6" }
+        ]
+      }'
+```
+
+Response (201):
+
+```json
+{
+  "data": {
+    "id": "…", "name": "Sales Pipeline",
+    "stages": [ { "id": "…", "name": "Lead", … }, { "id": "…", "name": "Qualified", … } ],
+    "created_at": "…"
+  }
+}
+```
+
+### `GET` / `PATCH` / `DELETE /api/v1/pipelines/{id}`
+
+Read, update, or delete a pipeline. Scopes: `pipelines:read` /
+`pipelines:write`. `PATCH` accepts `{ "name": "…" }`. `DELETE`
+cascades to stages and deals (all deals in the pipeline are removed).
+Returns `404` for pipelines in another account.
+
+### `POST /api/v1/pipelines/{id}/stages`
+
+Add a stage to a pipeline. Scope: `pipelines:write`.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/pipelines/{id}/stages \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{ "name": "Proposal", "color": "#10b981" }'
+```
+
+Response (201):
+
+```json
+{
+  "data": {
+    "id": "…", "name": "Proposal", "position": 2, "color": "#10b981", "created_at": "…"
+  }
+}
+```
+
+### `PATCH` / `DELETE /api/v1/stages/{id}`
+
+Update or delete a stage. Scope: `pipelines:write`. `PATCH` accepts
+any of `name`, `position`, `color`. `DELETE` is refused if the stage
+still contains deals — move or delete them first. Returns `404` for
+stages in another account.
+
+### `GET /api/v1/deals`
+
+List deals, newest first. Scope: `deals:read`. Paginated (see
+[Pagination](#pagination)). Optional filters: `?pipeline_id=`,
+`?stage_id=`, `?status=` (`open` / `won` / `lost`), `?contact_id=`,
+`?assigned_to=`.
+
+```json
+{
+  "data": [
+    {
+      "id": "…", "pipeline_id": "…", "stage_id": "…",
+      "title": "ACME Project", "value": 15000.00, "currency": "BRL",
+      "status": "open",
+      "contact": { "id": "…", "phone": "+14155550123", "name": "Jane Doe", "avatar_url": null },
+      "stage": { "id": "…", "name": "Qualified", "color": "#8b5cf6" },
+      "assignee": { "id": "…", "full_name": "John", "email": "john@…", "avatar_url": null },
+      "notes": null, "expected_close_date": "2026-09-30",
+      "created_at": "…", "updated_at": "…"
+    }
+  ],
+  "meta": { "next_cursor": "…" }
+}
+```
+
+### `POST /api/v1/deals`
+
+Create a deal. Scope: `deals:write`. `pipeline_id`, `stage_id`,
+`contact_id`, and `title` are required.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/deals \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "pipeline_id": "…",
+        "stage_id": "…",
+        "contact_id": "…",
+        "title": "ACME Project",
+        "value": 15000.00,
+        "currency": "BRL",
+        "notes": "Interested in the enterprise plan",
+        "expected_close_date": "2026-09-30",
+        "assigned_to": "…"
+      }'
+```
+
+Response (201): the serialized deal (same shape as list rows above).
+
+### `GET` / `PATCH` / `DELETE /api/v1/deals/{id}`
+
+Read, update, or delete a single deal. Scopes: `deals:read` /
+`deals:write`. `PATCH` accepts partial updates on any deal field
+(`title`, `value`, `currency`, `notes`, `expected_close_date`,
+`assigned_to`, `conversation_id`, `pipeline_id`, `stage_id`,
+`contact_id`). `DELETE` removes the deal permanently.
+
+### `POST /api/v1/deals/{id}/move`
+
+Move a deal to a different stage in the same pipeline. Scope:
+`deals:write`.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/deals/{id}/move \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{ "stage_id": "…" }'
+```
+
+```json
+{
+  "data": {
+    "moved": true,
+    "deal": { /* full deal object */ }
+  }
+}
+```
+
+### `POST /api/v1/deals/{id}/status`
+
+Update a deal's status. Scope: `deals:write`. `status` must be `open`,
+`won`, or `lost`.
+
+```bash
+curl -X POST https://your-crm.example.com/api/v1/deals/{id}/status \
+  -H "Authorization: Bearer wacrm_live_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{ "status": "won" }'
+```
+
+```json
+{
+  "data": { /* full deal object with updated status */ }
+}
+```
+
 ## Pagination
 
 Every list endpoint pages the same way. Request a page size with
@@ -377,7 +569,6 @@ internal targets are refused at delivery time.
 ## Roadmap
 
 The public API now covers messaging, contacts, conversations,
-broadcasts, and outbound webhooks — the full scope of
+broadcasts, pipelines, deals, and outbound webhooks — the full scope of
 [#245](https://github.com/ArnasDon/wacrm/issues/245). Future ideas
-(deals/pipelines, templates, flows, a delivery queue for webhooks) are
-not yet scheduled.
+(templates, flows, a delivery queue for webhooks) are not yet scheduled.
