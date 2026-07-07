@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, UsersRound } from "lucide-react";
+import { Ban, MessageSquare, UsersRound } from "lucide-react";
 
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
@@ -37,6 +37,7 @@ function LoginPageInner() {
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
+  const errorParam = searchParams.get("error");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +45,15 @@ function LoginPageInner() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  // When the middleware redirects here with `error=account_disabled`
+  // the user still has a valid session cookie — sign them out so the
+  // login form works again and the message is visible.
+  useEffect(() => {
+    if (errorParam === "account_disabled") {
+      supabase.auth.signOut().catch(() => {});
+    }
+  }, [errorParam, supabase]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,24 +81,48 @@ function LoginPageInner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            {inviteToken ? (
-              <UsersRound className="h-6 w-6 text-primary" />
+          <CardHeader className="items-center text-center">
+            {errorParam === "account_disabled" ? (
+              <>
+                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-red-500/10">
+                  <Ban className="h-6 w-6 text-red-400" />
+                </div>
+                <CardTitle className="text-xl text-foreground">
+                  Account disabled
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  This account has been disabled by an administrator.
+                  If you believe this is a mistake, please contact
+                  your account administrator.
+                </CardDescription>
+              </>
             ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
+              <>
+                <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                  {inviteToken ? (
+                    <UsersRound className="h-6 w-6 text-primary" />
+                  ) : (
+                    <MessageSquare className="h-6 w-6 text-primary" />
+                  )}
+                </div>
+                <CardTitle className="text-xl text-foreground">
+                  {inviteToken ? t("login.signinToAccept") : t("login.welcomeBack")}
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  {inviteToken
+                    ? t("login.inviteDesc")
+                    : t("login.signinDesc")}
+                </CardDescription>
+              </>
             )}
-          </div>
-          <CardTitle className="text-xl text-foreground">
-            {inviteToken ? t("login.signinToAccept") : t("login.welcomeBack")}
-          </CardTitle>
-          <CardDescription className="text-muted-foreground">
-            {inviteToken
-              ? t("login.inviteDesc")
-              : t("login.signinDesc")}
-          </CardDescription>
-        </CardHeader>
+          </CardHeader>
         <CardContent>
+          {errorParam === "account_disabled" ? (
+            <p className="text-center text-sm text-muted-foreground">
+              You cannot sign in because your account has been disabled.
+              Contact your administrator for more information.
+            </p>
+          ) : (
           <form onSubmit={handleLogin} className="flex flex-col gap-4">
             {error && (
               <div className="rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -142,7 +176,9 @@ function LoginPageInner() {
               {loading ? t("auth.signinLoading") : t("auth.signin")}
             </Button>
           </form>
+          )}
 
+          {errorParam !== "account_disabled" && (
           <p className="mt-6 text-center text-sm text-muted-foreground">
             {t("auth.noAccount")}{" "}
             <Link
@@ -156,6 +192,7 @@ function LoginPageInner() {
               {t("auth.createAccount")}
             </Link>
           </p>
+          )}
         </CardContent>
       </Card>
     </div>
