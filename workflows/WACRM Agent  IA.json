@@ -675,12 +675,6 @@
               "type": "string"
             },
             {
-              "id": "b",
-              "name": "message_text",
-              "value": "={{ $('Webhook wacrm').item.json.body.message_text }}",
-              "type": "string"
-            },
-            {
               "id": "c",
               "name": "contact_name",
               "value": "={{ $('Buscar Contato').item.json.data.name }}",
@@ -701,7 +695,7 @@
             {
               "id": "213c10f8-cbea-41f8-bc34-b903bd76752f",
               "name": "media_url_id",
-              "value": "={{ $('Buscar Historico').item.json.data[0].media_url }}",
+              "value": "={{ $('Buscar Historico').item.json.data[0].media_url.split('/') [4] }}",
               "type": "string"
             },
             {
@@ -792,7 +786,7 @@
     },
     {
       "parameters": {
-        "url": "=https://graph.facebook.com/v25.0/{{ $('normalize').item.json.data[0].media_url.split('/') [4] }}",
+        "url": "=https://graph.facebook.com/v25.0/{{ $('normalize').item.json.media_url_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "options": {
@@ -1440,7 +1434,7 @@
           "headers": {
             "host": "webhook.autofunil.com.br",
             "user-agent": "node",
-            "content-length": "84",
+            "content-length": "76",
             "accept": "*/*",
             "accept-encoding": "br, gzip, deflate",
             "accept-language": "*",
@@ -1456,8 +1450,8 @@
           "params": {},
           "query": {},
           "body": {
-            "message_text": "Vcs tem?",
-            "conversation_id": "0835e7d7-8845-4835-a962-135fb5fde49f"
+            "message_text": "",
+            "conversation_id": "ce5a2dda-83a3-4a69-9a0e-e2004040f9b9"
           },
           "webhookUrl": "https://webhook.autofunil.com.br/webhook/wacrm-ai-agent",
           "executionMode": "production"
@@ -1971,7 +1965,7 @@
     "timeSavedMode": "fixed",
     "callerPolicy": "workflowsFromSameOwner"
   },
-  "versionId": "e0d76d75-7481-477c-a5ce-f0accea84427",
+  "versionId": "b89dfa0f-3435-4dc4-a073-2ab74383b971",
   "meta": {
     "aiBuilderAssisted": true,
     "builderVariant": "mcp",
