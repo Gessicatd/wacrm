@@ -170,6 +170,11 @@ export function SettingsOverview({
       ),
     },
     {
+      section: 'instagram',
+      loading: false,
+      subtitle: 'Instagram DM integration',
+    },
+    {
       section: 'members',
       loading: countsLoading,
       subtitle:

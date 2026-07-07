@@ -59,32 +59,51 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    if (!body.access_token || !body.instagram_business_account_id) {
+    if (!body.instagram_business_account_id) {
       return NextResponse.json(
-        { error: "access_token and instagram_business_account_id are required" },
+        { error: "instagram_business_account_id is required" },
         { status: 400 },
       );
     }
 
-    // Verify the credentials by fetching the Instagram Business Account info.
+    // Resolve token: if provided, verify and encrypt; otherwise reuse existing.
+    let encryptedToken: string | undefined;
     let businessName = body.business_name || null;
-    try {
-      const info = await verifyIgAccount({
-        igUserId: body.instagram_business_account_id,
-        accessToken: body.access_token,
-      });
-      if (info.name) businessName = info.name;
-      if (!businessName && info.username) businessName = info.username;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Verification failed";
-      return NextResponse.json(
-        { error: `Instagram credentials verification failed: ${message}` },
-        { status: 400 },
-      );
-    }
 
-    // Encrypt the access token before storing.
-    const encryptedToken = encrypt(body.access_token);
+    if (body.access_token) {
+      // Verify the credentials by fetching the Instagram Business Account info.
+      try {
+        const info = await verifyIgAccount({
+          igUserId: body.instagram_business_account_id,
+          accessToken: body.access_token,
+        });
+        if (info.name) businessName = info.name;
+        if (!businessName && info.username) businessName = info.username;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Verification failed";
+        return NextResponse.json(
+          { error: `Instagram credentials verification failed: ${message}` },
+          { status: 400 },
+        );
+      }
+
+      encryptedToken = encrypt(body.access_token);
+    } else {
+      // Reuse existing encrypted token.
+      const { data: existing } = await ctx.supabase
+        .from("instagram_config")
+        .select("access_token")
+        .eq("account_id", ctx.accountId)
+        .maybeSingle();
+
+      if (!existing?.access_token) {
+        return NextResponse.json(
+          { error: "Access token is required for initial setup" },
+          { status: 400 },
+        );
+      }
+      encryptedToken = existing.access_token;
+    }
 
     const { error } = await ctx.supabase.from("instagram_config").upsert(
       {
