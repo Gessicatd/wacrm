@@ -26,6 +26,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       media_url?: string;
       instagram_message_id?: string;
       timestamp?: string;
+      sender_type?: "customer" | "agent" | "bot";
     } | null;
 
     if (!body || !body.instagram_id || !body.content_type) {
@@ -111,11 +112,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // Insert the message.
+    const validSenderTypes = ["customer", "agent", "bot"] as const;
+    const senderType = body.sender_type && validSenderTypes.includes(body.sender_type)
+      ? body.sender_type
+      : "customer";
+
     const msgPayload: Record<string, unknown> = {
       account_id: ctx.accountId,
-      user_id: auditUserId,
       conversation_id: conversationId,
-      sender_type: "customer",
+      sender_type: senderType,
       content_type: body.content_type,
       content_text: body.text || null,
       media_url: body.media_url || null,
