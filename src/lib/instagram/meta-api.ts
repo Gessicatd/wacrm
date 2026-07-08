@@ -8,7 +8,7 @@
  *   https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api
  */
 
-const INSTAGRAM_API_VERSION = 'v22.0'
+const INSTAGRAM_API_VERSION = 'v25.0'
 const INSTAGRAM_API_BASE = `https://graph.instagram.com/${INSTAGRAM_API_VERSION}`
 
 export interface InstagramSendResult {
@@ -187,17 +187,13 @@ export async function subscribeIgApp(
   igUserId: string,
   accessToken: string,
 ): Promise<{ success: boolean }> {
-  const url = `${INSTAGRAM_API_BASE}/${igUserId}/subscribed_apps`
+  const url = `${INSTAGRAM_API_BASE}/${igUserId}/subscribed_apps?subscribed_fields=messages&access_token=${accessToken}`
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify({
-      subscribed_fields: ['messages'],
-    }),
   })
 
   if (!response.ok) {
@@ -216,11 +212,9 @@ export async function getSubscribedIgApps(
   igUserId: string,
   accessToken: string,
 ): Promise<{ data?: { subscribed_fields?: string[] }[] }> {
-  const url = `${INSTAGRAM_API_BASE}/${igUserId}/subscribed_apps`
+  const url = `${INSTAGRAM_API_BASE}/${igUserId}/subscribed_apps?access_token=${accessToken}`
 
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
+  const response = await fetch(url)
 
   if (!response.ok) {
     await throwInstagramError(response, `Instagram API error: ${response.status}`)

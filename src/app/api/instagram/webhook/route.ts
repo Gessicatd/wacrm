@@ -71,14 +71,22 @@ export async function GET(request: Request) {
 // POST — receive inbound Instagram messages
 // ============================================================
 export async function POST(request: Request) {
-  // Verify HMAC-SHA256 signature (same App Secret as WhatsApp).
-  const rawBody = await request.clone().text()
+  // Read raw body first so we can HMAC-verify the exact bytes Meta
+  // signed. request.json() would re-encode and break the signature.
+  const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256')
+
   if (!verifyMetaWebhookSignature(rawBody, signature)) {
-    return new NextResponse('Forbidden', { status: 403 })
+    console.warn('[instagram webhook] rejected request with invalid signature')
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
-  const body: InstagramWebhookPayload = JSON.parse(rawBody)
+  let body: InstagramWebhookPayload
+  try {
+    body = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
 
   // Process asynchronously — return 200 to Meta immediately.
   after(async () => {
@@ -135,16 +143,31 @@ interface InstagramAttachment {
 // ============================================================
 
 async function processInstagramWebhook(body: InstagramWebhookPayload) {
-  if (body.object !== 'instagram') return
+  if (body.object !== 'instagram') {
+    console.warn('[instagram webhook] ignored non-instagram object:', body.object)
+    return
+  }
   if (!body.entry) return
 
+  console.log('[instagram webhook] received', body.entry.length, 'entries')
+
   for (const entry of body.entry) {
-    if (!entry.messaging) continue
+    if (!entry.messaging || entry.messaging.length === 0) {
+      console.log('[instagram webhook] entry', entry.id, 'has no messaging items')
+      continue
+    }
+
+    console.log('[instagram webhook] entry', entry.id, 'has', entry.messaging.length, 'messaging items')
 
     // The recipient.id in the first messaging item is the Instagram
     // Business Account ID that received the message.
     const recipientIgUserId = entry.messaging[0]?.recipient?.id
-    if (!recipientIgUserId) continue
+    if (!recipientIgUserId) {
+      console.log('[instagram webhook] entry has no recipient id')
+      continue
+    }
+
+    console.log('[instagram webhook] looking up config for ig_user_id:', recipientIgUserId)
 
     // Find Instagram config by business account ID.
     const db = supabaseAdmin()
@@ -158,9 +181,12 @@ async function processInstagramWebhook(body: InstagramWebhookPayload) {
       console.error(
         '[instagram webhook] no config found for ig_user_id:',
         recipientIgUserId,
+        configError ? `error: ${configError.message}` : '',
       )
       continue
     }
+
+    console.log('[instagram webhook] found config for account:', config.account_id)
 
     for (const item of entry.messaging) {
       if (!item.message) continue
@@ -183,6 +209,17 @@ async function processMessage(
   const recipientId = item.recipient.id
   const accountId = config.account_id
   const configUserId = config.user_id
+
+  console.log('[instagram webhook] processing message',
+    'mid:', msg.mid,
+    'from:', senderId,
+    'text:', msg.text?.substring(0, 100))
+
+  // Ignore echo messages (sent by the business).
+  if (msg.is_echo) {
+    console.log('[instagram webhook] skipping echo message')
+    return
+  }
 
   // Determine content type and text.
   let contentType: string
