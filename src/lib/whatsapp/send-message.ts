@@ -28,6 +28,10 @@ import {
   type MediaKind,
 } from '@/lib/whatsapp/meta-api';
 import {
+  sendText as sendRyzeText,
+  sendMedia as sendRyzeMedia,
+} from '@/lib/ryzeapi/client';
+import {
   sendTextMessage as sendInstagramText,
   sendMediaMessage as sendInstagramMedia,
   sendButtonTemplate as sendInstagramButton,
@@ -198,7 +202,7 @@ export async function sendMessageToConversation(
   // Conversation + contact, account-scoped.
   const { data: conversation, error: convError } = await db
     .from('conversations')
-    .select('*, contact:contacts(*)')
+    .select('*, contact:contacts(*), provider')
     .eq('id', conversationId)
     .eq('account_id', accountId)
     .single();
@@ -209,8 +213,9 @@ export async function sendMessageToConversation(
 
   const contact = conversation.contact;
   const channel = conversation.channel || 'whatsapp';
+  const provider = conversation.provider || 'meta';
 
-  // Instagram channel — route via n8n webhook instead of Meta API.
+  // Instagram channel — route via Instagram API.
   if (channel === 'instagram') {
     return sendInstagramMessage(
       db, accountId, conversationId, contact, params,
@@ -232,6 +237,11 @@ export async function sendMessageToConversation(
       'Invalid phone number format',
       400
     );
+  }
+
+  // RyzeAPI provider — route via RyzeAPI REST API instead of Meta.
+  if (provider === 'ryzeapi') {
+    return sendRyzeMessage(db, accountId, conversationId, sanitizedPhone, params);
   }
 
   // WhatsApp config, account-scoped.
@@ -466,10 +476,118 @@ export async function sendMessageToConversation(
 // Instagram send — calls the Instagram Messaging API directly.
 // ----------------------------------------------------------
 
+async function sendRyzeMessage(
+  db: SupabaseClient,
+  accountId: string,
+  conversationId: string,
+  phone: string,
+  params: SendMessageParams,
+): Promise<{ messageId: string; whatsappMessageId: string }> {
+  const { data: config, error: configError } = await db
+    .from('ryzeapi_config')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('status', 'connected')
+    .single();
+
+  if (configError || !config) {
+    throw new SendMessageError(
+      'ryzeapi_not_configured',
+      'RyzeAPI is not configured or not connected.',
+      400,
+    );
+  }
+
+  const instanceToken = decrypt(config.instance_token);
+  const {
+    messageType,
+    contentText,
+    mediaUrl,
+    filename,
+    replyToMessageId,
+  } = params;
+
+  let ryzeMessageId = '';
+  try {
+    if (messageType === 'template') {
+      const r = await sendRyzeText({
+        apiUrl: config.api_url,
+        instanceToken,
+        instance: config.instance_name,
+        number: phone,
+        message: `[template:${params.templateName}]`,
+      });
+      ryzeMessageId = r.messageId;
+    } else if (['image', 'video', 'audio', 'document'].includes(messageType)) {
+      const r = await sendRyzeMedia({
+        apiUrl: config.api_url,
+        instanceToken,
+        instance: config.instance_name,
+        number: phone,
+        mediaType: messageType as 'image' | 'video' | 'audio' | 'document',
+        mediaUrl: mediaUrl || undefined,
+        message: contentText || undefined,
+        fileName: filename || undefined,
+      });
+      ryzeMessageId = r.messageId;
+    } else {
+      const r = await sendRyzeText({
+        apiUrl: config.api_url,
+        instanceToken,
+        instance: config.instance_name,
+        number: phone,
+        message: contentText || '',
+      });
+      ryzeMessageId = r.messageId;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown RyzeAPI error';
+    throw new SendMessageError('ryzeapi_error', `RyzeAPI error: ${message}`, 502);
+  }
+
+  // Persist the sent message.
+  const { data: messageRecord, error: msgError } = await db
+    .from('messages')
+    .insert({
+      account_id: accountId,
+      conversation_id: conversationId,
+      sender_type: 'agent',
+      content_type: messageType,
+      content_text: contentText || null,
+      media_url: mediaUrl || null,
+      message_id: ryzeMessageId,
+      status: 'sent',
+      reply_to_message_id: replyToMessageId || null,
+    })
+    .select()
+    .single();
+
+  if (msgError) {
+    throw new SendMessageError(
+      'db_error',
+      `Message sent via RyzeAPI but failed to save to DB: ${msgError.message}`,
+      500,
+    );
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: contentText || `[${messageType}]`,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversationId);
+
+  return { messageId: messageRecord.id, whatsappMessageId: ryzeMessageId };
+}
+
 async function sendInstagramMessage(
   db: SupabaseClient,
   accountId: string,
   conversationId: string,
+  // Pre-existing: resolves from Supabase join type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contact: any,
   params: SendMessageParams,
 ): Promise<SendMessageResult> {

@@ -13,6 +13,12 @@ import {
   sendButtonTemplate,
   sendPrivateReply,
 } from '@/lib/instagram/meta-api'
+import {
+  sendText as sendRyzeText,
+  sendMedia as sendRyzeMedia,
+  sendButtons as sendRyzeButtons,
+  sendList as sendRyzeList,
+} from '@/lib/ryzeapi/client'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -36,16 +42,22 @@ import { supabaseAdmin } from './admin-client'
 // channel and routes to WhatsApp or Instagram API accordingly.
 // ------------------------------------------------------------
 
-async function resolveChannel(
+type Transport = 'whatsapp' | 'instagram' | 'ryzeapi'
+
+async function resolveTransport(
   db: ReturnType<typeof supabaseAdmin>,
   conversationId: string,
-): Promise<'whatsapp' | 'instagram'> {
+): Promise<Transport> {
   const { data: conv } = await db
     .from('conversations')
-    .select('channel')
+    .select('channel, provider')
     .eq('id', conversationId)
     .maybeSingle()
-  return (conv?.channel as 'whatsapp' | 'instagram') || 'whatsapp'
+  const channel = (conv?.channel as string) || 'whatsapp'
+  if (channel === 'instagram') return 'instagram'
+  const provider = (conv?.provider as string) || 'meta'
+  if (provider === 'ryzeapi') return 'ryzeapi'
+  return 'whatsapp'
 }
 
 /**
@@ -101,9 +113,12 @@ export async function engineSendText(
   args: SendTextEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
-  const channel = await resolveChannel(db, args.conversationId)
-  if (channel === 'instagram') {
+  const transport = await resolveTransport(db, args.conversationId)
+  if (transport === 'instagram') {
     return sendTextViaInstagram(db, args)
+  }
+  if (transport === 'ryzeapi') {
+    return sendTextViaRyzeApi(db, args)
   }
   return sendTextViaWhatsApp(db, args)
 }
@@ -195,6 +210,69 @@ async function sendTextViaWhatsApp(
   return { whatsapp_message_id: waMessageId }
 }
 
+async function sendTextViaRyzeApi(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendTextEngineArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, phone')
+    .eq('id', args.contactId)
+    .eq('account_id', args.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.phone) {
+    throw new Error('contact not found for this account')
+  }
+
+  const sanitized = sanitizePhoneForMeta(contact.phone)
+  if (!isValidE164(sanitized)) {
+    throw new Error(`contact phone invalid: ${contact.phone}`)
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('ryzeapi_config')
+    .select('*')
+    .eq('account_id', args.accountId)
+    .eq('status', 'connected')
+    .single()
+  if (configErr || !config) {
+    throw new Error('RyzeAPI not configured or not connected')
+  }
+
+  const instanceToken = decrypt(config.instance_token)
+  const r = await sendRyzeText({
+    apiUrl: config.api_url,
+    instanceToken,
+    instance: config.instance_name,
+    number: sanitized,
+    message: args.text,
+  })
+
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: args.accountId,
+    conversation_id: args.conversationId,
+    sender_type: 'bot',
+    content_type: 'text',
+    content_text: args.text,
+    message_id: r.messageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent via RyzeAPI but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: args.text,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', args.conversationId)
+
+  return { whatsapp_message_id: r.messageId }
+}
+
 async function sendTextViaInstagram(
   db: ReturnType<typeof supabaseAdmin>,
   args: SendTextEngineArgs,
@@ -283,9 +361,12 @@ export async function engineSendMedia(
   args: SendMediaEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
-  const channel = await resolveChannel(db, args.conversationId)
-  if (channel === 'instagram') {
+  const transport = await resolveTransport(db, args.conversationId)
+  if (transport === 'instagram') {
     return sendMediaViaInstagram(db, args)
+  }
+  if (transport === 'ryzeapi') {
+    return sendMediaViaRyzeApi(db, args)
   }
   return sendMediaViaWhatsApp(db, args)
 }
@@ -379,6 +460,73 @@ async function sendMediaViaWhatsApp(
     .eq('id', args.conversationId)
 
   return { whatsapp_message_id: waMessageId }
+}
+
+async function sendMediaViaRyzeApi(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendMediaEngineArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, phone')
+    .eq('id', args.contactId)
+    .eq('account_id', args.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.phone) {
+    throw new Error('contact not found for this account')
+  }
+
+  const sanitized = sanitizePhoneForMeta(contact.phone)
+  if (!isValidE164(sanitized)) {
+    throw new Error(`contact phone invalid: ${contact.phone}`)
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('ryzeapi_config')
+    .select('*')
+    .eq('account_id', args.accountId)
+    .eq('status', 'connected')
+    .single()
+  if (configErr || !config) {
+    throw new Error('RyzeAPI not configured or not connected')
+  }
+
+  const instanceToken = decrypt(config.instance_token)
+  const r = await sendRyzeMedia({
+    apiUrl: config.api_url,
+    instanceToken,
+    instance: config.instance_name,
+    number: sanitized,
+    mediaType: args.kind,
+    mediaUrl: args.link,
+    message: args.caption,
+    fileName: args.filename,
+  })
+
+  const preview = args.caption?.trim() || `[${args.kind}]`
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: args.accountId,
+    conversation_id: args.conversationId,
+    sender_type: 'bot',
+    content_type: args.kind,
+    content_text: args.caption ?? null,
+    message_id: r.messageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent via RyzeAPI but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: preview,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', args.conversationId)
+
+  return { whatsapp_message_id: r.messageId }
 }
 
 async function sendMediaViaInstagram(
@@ -511,9 +659,12 @@ async function sendInteractiveViaMeta(
   input: SendInput,
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
-  const channel = await resolveChannel(db, input.conversationId)
-  if (channel === 'instagram') {
+  const transport = await resolveTransport(db, input.conversationId)
+  if (transport === 'instagram') {
     return sendInteractiveViaInstagram(db, input)
+  }
+  if (transport === 'ryzeapi') {
+    return sendInteractiveViaRyzeApi(db, input)
   }
   return sendInteractiveViaWhatsApp(db, input)
 }
@@ -619,6 +770,93 @@ async function sendInteractiveViaWhatsApp(
     .eq('id', input.conversationId)
 
   return { whatsapp_message_id: waMessageId }
+}
+
+async function sendInteractiveViaRyzeApi(
+  db: ReturnType<typeof supabaseAdmin>,
+  input: SendInput,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, phone')
+    .eq('id', input.contactId)
+    .eq('account_id', input.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.phone) {
+    throw new Error('contact not found for this account')
+  }
+
+  const sanitized = sanitizePhoneForMeta(contact.phone)
+  if (!isValidE164(sanitized)) {
+    throw new Error(`contact phone invalid: ${contact.phone}`)
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('ryzeapi_config')
+    .select('*')
+    .eq('account_id', input.accountId)
+    .eq('status', 'connected')
+    .single()
+  if (configErr || !config) {
+    throw new Error('RyzeAPI not configured or not connected')
+  }
+
+  const instanceToken = decrypt(config.instance_token)
+
+  let ryzeMessageId = ''
+  if (input.kind === 'buttons') {
+    const r = await sendRyzeButtons({
+      apiUrl: config.api_url,
+      instanceToken,
+      instance: config.instance_name,
+      number: sanitized,
+      contentText: input.bodyText,
+      buttons: input.buttons.map((b) => ({ displayText: b.title, id: b.id })),
+      headerText: input.headerText,
+      footerText: input.footerText,
+    })
+    ryzeMessageId = r.messageId
+  } else {
+    const r = await sendRyzeList({
+      apiUrl: config.api_url,
+      instanceToken,
+      instance: config.instance_name,
+      number: sanitized,
+      contentText: input.bodyText,
+      buttonText: input.buttonLabel,
+      sections: input.sections.map((s) => ({
+        title: s.title ?? '',
+        rows: s.rows.map((row) => ({ id: row.id, title: row.title, description: row.description })),
+      })),
+      headerText: input.headerText,
+      footerText: input.footerText,
+    })
+    ryzeMessageId = r.messageId
+  }
+
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: input.accountId,
+    conversation_id: input.conversationId,
+    sender_type: 'bot',
+    content_type: 'interactive',
+    content_text: input.bodyText,
+    message_id: ryzeMessageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent via RyzeAPI but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: input.bodyText,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.conversationId)
+
+  return { whatsapp_message_id: ryzeMessageId }
 }
 
 async function sendInteractiveViaInstagram(

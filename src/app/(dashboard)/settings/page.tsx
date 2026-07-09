@@ -13,6 +13,7 @@ import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
 import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
 import { InstagramConfig } from '@/components/settings/instagram-config';
+import { RyzeApiConfig } from '@/components/settings/ryzeapi-config';
 import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
@@ -71,6 +72,7 @@ function SettingsPageContent() {
     appearance: <AppearancePanel />,
     whatsapp: <WhatsAppConfig />,
     instagram: <InstagramConfig />,
+    ryzeapi: <RyzeApiConfig />,
     templates: <TemplateManager />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,

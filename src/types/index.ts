@@ -254,6 +254,23 @@ export interface WhatsAppConfig {
   last_registration_error?: string;
 }
 
+export interface RyzeApiConfig {
+  id: string;
+  account_id: string;
+  user_id: string;
+  api_url: string;
+  api_token: string;
+  instance_name: string;
+  instance_token: string;
+  status: 'connected' | 'disconnected' | 'pending_qr';
+  qr_base64?: string;
+  qr_expires_at?: string;
+  webhook_label?: string;
+  connected_at?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Raw Meta status enum. We persist this verbatim from Meta (sync + webhook)
 // rather than collapsing to a local TitleCase set — distinctions like
 // PAUSED vs DISABLED vs IN_APPEAL drive the edit/resubmit/delete flows.

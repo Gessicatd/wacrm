@@ -1038,26 +1038,33 @@ async function findOrCreateConversation(
   configOwnerUserId: string,
   contactId: string,
 ) {
-  // Look for existing conversation in this account
+  // Look for existing conversation in this account — match by channel
+  // and provider to keep Meta-webhook conversations separate from
+  // RyzeAPI-webhook conversations when both are active.
   const { data: existing, error: findError } = await supabaseAdmin()
     .from('conversations')
     .select('*')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
-    .single()
+    .eq('channel', 'whatsapp')
+    .eq('provider', 'meta')
+    .maybeSingle()
 
   if (!findError && existing) {
     return { conversation: existing, created: false }
   }
 
   // Create new conversation. Same tenancy + audit split as
-  // findOrCreateContact above.
+  // findOrCreateContact above. provider='meta' so sends always route
+  // through Meta Cloud API for this conversation.
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
     .insert({
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      channel: 'whatsapp',
+      provider: 'meta',
     })
     .select()
     .single()
