@@ -321,6 +321,32 @@ function TriggerPanel({
           </div>
         )}
       </div>
+      <div className="mt-3">
+        <label className="text-muted-foreground mb-1 block text-xs">
+          Channel
+        </label>
+        <Select
+          value={state.channel ?? ''}
+          onValueChange={(v) =>
+            setState((s) => ({
+              ...s,
+              channel: (v ? v as 'whatsapp' | 'instagram' : null),
+            }))
+          }
+        >
+          <SelectTrigger className="bg-muted w-full md:w-64">
+            <SelectValue placeholder="Both (WhatsApp + Instagram)" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Both (WhatsApp + Instagram)</SelectItem>
+            <SelectItem value="whatsapp">WhatsApp only</SelectItem>
+            <SelectItem value="instagram">Instagram only</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          Limit this flow to a specific channel, or leave on &quot;Both&quot;.
+        </p>
+      </div>
       {triggerIssues.length > 0 && (
         <div className="mt-3 flex flex-col gap-1">
           {triggerIssues.map((i, ix) => (

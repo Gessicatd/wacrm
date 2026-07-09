@@ -73,6 +73,8 @@ export interface BuilderInitial {
   trigger_type: AutomationTriggerType
   trigger_config: Record<string, unknown>
   is_active: boolean
+  /** Channel scope — NULL = both. */
+  channel?: 'whatsapp' | 'instagram' | null
   steps: BuilderStep[]
 }
 
@@ -632,6 +634,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
         trigger_config: state.trigger_config,
         is_active: state.is_active,
         steps: toApiSteps(state.steps),
+        ...(state.channel !== undefined && { channel: state.channel }),
       }
 
       const res = isEditing
@@ -717,8 +720,10 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
             <TriggerCard
               type={state.trigger_type}
               config={state.trigger_config}
+              channel={state.channel}
               onTypeChange={(t) => patchTop("trigger_type", t)}
               onConfigChange={(c) => patchTop("trigger_config", c)}
+              onChannelChange={(ch) => patchTop("channel", ch)}
             />
             <StepList
               steps={state.steps}
@@ -744,13 +749,17 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
 function TriggerCard({
   type,
   config,
+  channel,
   onTypeChange,
   onConfigChange,
+  onChannelChange,
 }: {
   type: AutomationTriggerType
   config: Record<string, unknown>
+  channel?: 'whatsapp' | 'instagram' | null
   onTypeChange: (t: AutomationTriggerType) => void
   onConfigChange: (c: Record<string, unknown>) => void
+  onChannelChange: (ch: 'whatsapp' | 'instagram' | null) => void
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -795,6 +804,23 @@ function TriggerCard({
               </select>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {TRIGGER_OPTIONS.find((o) => o.value === type)?.hint}
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Channel
+              </label>
+              <select
+                value={channel ?? ''}
+                onChange={(e) => onChannelChange((e.target.value || null) as 'whatsapp' | 'instagram' | null)}
+                className="w-full rounded-md border border-border bg-muted px-2 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none"
+              >
+                <option value="">Both (WhatsApp + Instagram)</option>
+                <option value="whatsapp">WhatsApp only</option>
+                <option value="instagram">Instagram only</option>
+              </select>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Limit this automation to a specific channel, or leave on &quot;Both&quot;.
               </p>
             </div>
             {type === "keyword_match" && (

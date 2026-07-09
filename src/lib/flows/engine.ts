@@ -313,6 +313,7 @@ async function findEntryFlow(
   accountId: string,
   message: ParsedInbound,
   isFirstInbound: boolean,
+  channel?: 'whatsapp' | 'instagram',
 ): Promise<FlowRow | null> {
   // Only text messages can match an entry trigger. Interactive replies
   // are responses to existing prompts; they never start a new flow.
@@ -321,11 +322,17 @@ async function findEntryFlow(
   // Pull all active flows for this account. Active set is bounded
   // (the builder discourages double-trigger overlap; partial index
   // makes the lookup index-supported).
-  const { data: flows, error } = await db
+  let query = db
     .from("flows")
     .select("*")
     .eq("account_id", accountId)
     .eq("status", "active")
+
+  if (channel) {
+    query = query.or(`channel.is.null,channel.eq.${channel}`)
+  }
+
+  const { data: flows, error } = await query
     .order("created_at", { ascending: true });
   if (error || !flows) return null;
 
@@ -866,6 +873,7 @@ export async function dispatchInboundToFlows(
       input.accountId,
       input.message,
       input.isFirstInboundMessage,
+      input.channel,
     );
     if (!flow || !flow.entry_node_id) {
       return { consumed: false, outcome: "no_match" };

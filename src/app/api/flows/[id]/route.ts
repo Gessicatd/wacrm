@@ -77,6 +77,8 @@ interface PutBody {
   trigger_config?: Record<string, unknown>
   entry_node_id?: string | null
   fallback_policy?: Record<string, unknown>
+  /** Channel scope — NULL = both. */
+  channel?: 'whatsapp' | 'instagram' | null
   nodes?: Array<{
     node_key: string
     node_type: string
@@ -123,6 +125,8 @@ export async function PUT(
     flowPatch.entry_node_id = body.entry_node_id
   if (body.fallback_policy !== undefined)
     flowPatch.fallback_policy = body.fallback_policy
+  if (body.channel !== undefined)
+    flowPatch.channel = body.channel
 
   const { error: updErr } = await admin
     .from('flows')

@@ -732,6 +732,7 @@ async function processMessage(
     userId: configOwnerUserId,
     contactId: contactRecord.id,
     conversationId: conversation.id,
+    channel: 'whatsapp',
     message:
       interactiveReplyId
         ? {
@@ -779,6 +780,7 @@ async function processMessage(
       accountId,
       triggerType,
       contactId: contactRecord.id,
+      channel: 'whatsapp',
       context: {
         message_text: inboundText,
         conversation_id: conversation.id,

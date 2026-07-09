@@ -1,4 +1,5 @@
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import { sendTextMessage as sendIgTextMessage, sendButtonTemplate } from '@/lib/instagram/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -17,6 +18,9 @@ import { supabaseAdmin } from './admin-client'
 // on hand. Kept here (rather than refactoring the user-facing send
 // route) to avoid risk to the working manual-send path — they can
 // converge in a later refactor.
+//
+// Channel awareness (migration 036): looks up the conversation's
+// channel and routes to WhatsApp or Instagram API accordingly.
 // ------------------------------------------------------------
 
 interface SendTextArgs {
@@ -60,6 +64,25 @@ type SendInput =
 async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
 
+  // Determine the conversation channel so we route to the right API.
+  const { data: conv } = await db
+    .from('conversations')
+    .select('channel')
+    .eq('id', input.conversationId)
+    .maybeSingle()
+  const channel = (conv?.channel as string) || 'whatsapp'
+
+  if (channel === 'instagram') {
+    return sendViaInstagramAPI(db, input)
+  }
+
+  return sendViaWhatsAppAPI(db, input)
+}
+
+async function sendViaWhatsAppAPI(
+  db: ReturnType<typeof supabaseAdmin>,
+  input: SendInput,
+): Promise<{ whatsapp_message_id: string }> {
   // Scope the contact + config lookups by account_id, not user_id.
   // The engine uses the service-role client (bypassing RLS); without
   // this filter, an authenticated user could fire their own
@@ -174,4 +197,80 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     .eq('id', input.conversationId)
 
   return { whatsapp_message_id: waMessageId }
+}
+
+async function sendViaInstagramAPI(
+  db: ReturnType<typeof supabaseAdmin>,
+  input: SendInput,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, instagram_id')
+    .eq('id', input.contactId)
+    .eq('account_id', input.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.instagram_id) {
+    throw new Error('contact has no instagram_id for this account')
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('instagram_config')
+    .select('*')
+    .eq('account_id', input.accountId)
+    .single()
+  if (configErr || !config) {
+    throw new Error('Instagram not configured for this account')
+  }
+
+  const accessToken = decrypt(config.access_token)
+
+  let igMessageId = ''
+  if (input.kind === 'template') {
+    const r = await sendButtonTemplate({
+      igUserId: config.instagram_business_account_id,
+      accessToken,
+      to: contact.instagram_id,
+      text: input.templateName,
+      buttons: [{ type: 'postback', title: input.templateName, payload: `template_${input.templateName}` }],
+    })
+    igMessageId = r.messageId
+  } else {
+    const r = await sendIgTextMessage({
+      igUserId: config.instagram_business_account_id,
+      accessToken,
+      to: contact.instagram_id,
+      text: input.text,
+    })
+    igMessageId = r.messageId
+  }
+
+  const content_type = input.kind === 'template' ? 'template' : 'text'
+  const content_text = input.kind === 'text' ? input.text : null
+  const template_name = input.kind === 'template' ? input.templateName : null
+
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: input.accountId,
+    conversation_id: input.conversationId,
+    sender_type: 'bot',
+    content_type,
+    content_text,
+    template_name,
+    message_id: igMessageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent to Instagram but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text:
+        input.kind === 'template' ? `[template:${input.templateName}]` : input.text,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.conversationId)
+
+  return { whatsapp_message_id: igMessageId }
 }

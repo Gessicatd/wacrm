@@ -73,6 +73,8 @@ export async function POST(request: Request) {
         description?: string | null
         trigger_type?: 'keyword' | 'first_inbound_message' | 'manual'
         trigger_config?: Record<string, unknown>
+        /** Channel scope — NULL = both. */
+        channel?: 'whatsapp' | 'instagram' | null
         /**
          * If set, clone the matching template's name + trigger +
          * entry_node_id + nodes[] into a fresh draft for this user.
@@ -108,6 +110,7 @@ export async function POST(request: Request) {
         trigger_type: template.trigger_type,
         trigger_config: template.trigger_config,
         entry_node_id: template.entry_node_id,
+        ...(body.channel !== undefined && { channel: body.channel }),
       })
       .select()
       .single()
@@ -156,6 +159,7 @@ export async function POST(request: Request) {
       status: 'draft',
       trigger_type,
       trigger_config: body.trigger_config ?? {},
+      ...(body.channel !== undefined && { channel: body.channel }),
     })
     .select()
     .single()

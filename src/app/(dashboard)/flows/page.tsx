@@ -49,6 +49,7 @@ interface FlowRow {
   status: "draft" | "active" | "archived";
   trigger_type: "keyword" | "first_inbound_message" | "manual";
   trigger_config: { keywords?: string[] } | Record<string, unknown>;
+  channel?: 'whatsapp' | 'instagram' | null;
   execution_count: number;
   last_executed_at: string | null;
   created_at: string;
@@ -393,6 +394,11 @@ function FlowCard({
           <StatusIcon className="h-3 w-3" />
           {t('flows.' + flow.status)}
         </Badge>
+        {flow.channel && (
+          <Badge variant="outline" className="shrink-0 text-[10px] bg-muted/50">
+            {flow.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}
+          </Badge>
+        )}
       </div>
 
       <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">

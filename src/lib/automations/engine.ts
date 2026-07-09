@@ -44,6 +44,10 @@ export interface DispatchInput {
   triggerType: AutomationTriggerType
   contactId?: string | null
   context?: AutomationContext
+  /** Channel the inbound message arrived on. Automations scoped to a
+   *  specific channel (e.g. 'instagram') only fire for that channel.
+   *  NULL-channel automations fire on both (backward compatible). */
+  channel?: 'whatsapp' | 'instagram'
 }
 
 /**
@@ -82,12 +86,18 @@ export async function runAutomationsForTrigger(input: DispatchInput): Promise<vo
       }
     }
 
-    const { data: automations, error } = await db
+    let query = db
       .from('automations')
       .select('*')
       .eq('account_id', input.accountId)
       .eq('trigger_type', input.triggerType)
       .eq('is_active', true)
+
+    if (input.channel) {
+      query = query.or(`channel.is.null,channel.eq.${input.channel}`)
+    }
+
+    const { data: automations, error } = await query
 
     if (error) {
       console.error('[automations] fetch failed:', error)

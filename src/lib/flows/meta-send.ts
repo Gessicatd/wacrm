@@ -7,6 +7,11 @@ import {
   type InteractiveListSection,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api'
+import {
+  sendTextMessage as sendIgTextMessage,
+  sendMediaMessage as sendIgMediaMessage,
+  sendButtonTemplate,
+} from '@/lib/instagram/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -26,10 +31,21 @@ import { supabaseAdmin } from './admin-client'
 // phone-variant retry + DB persistence are obvious extraction
 // candidates into a shared base.
 //
-// PR #1 ships this in isolation: callers don't exist yet. PR #2
-// brings the flow runner online and wires it up. Shipping it now
-// keeps the foundation PR self-contained and unit-testable.
+// Channel awareness (migration 036): looks up the conversation's
+// channel and routes to WhatsApp or Instagram API accordingly.
 // ------------------------------------------------------------
+
+async function resolveChannel(
+  db: ReturnType<typeof supabaseAdmin>,
+  conversationId: string,
+): Promise<'whatsapp' | 'instagram'> {
+  const { data: conv } = await db
+    .from('conversations')
+    .select('channel')
+    .eq('id', conversationId)
+    .maybeSingle()
+  return (conv?.channel as 'whatsapp' | 'instagram') || 'whatsapp'
+}
 
 interface SendTextEngineArgs {
   /** Account-level tenancy key. Drives contact + whatsapp_config
@@ -61,7 +77,17 @@ export async function engineSendText(
   args: SendTextEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
+  const channel = await resolveChannel(db, args.conversationId)
+  if (channel === 'instagram') {
+    return sendTextViaInstagram(db, args)
+  }
+  return sendTextViaWhatsApp(db, args)
+}
 
+async function sendTextViaWhatsApp(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendTextEngineArgs,
+): Promise<{ whatsapp_message_id: string }> {
   const { data: contact, error: contactErr } = await db
     .from('contacts')
     .select('id, phone')
@@ -145,6 +171,62 @@ export async function engineSendText(
   return { whatsapp_message_id: waMessageId }
 }
 
+async function sendTextViaInstagram(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendTextEngineArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, instagram_id')
+    .eq('id', args.contactId)
+    .eq('account_id', args.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.instagram_id) {
+    throw new Error('contact has no instagram_id for this account')
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('instagram_config')
+    .select('*')
+    .eq('account_id', args.accountId)
+    .single()
+  if (configErr || !config) {
+    throw new Error('Instagram not configured for this account')
+  }
+
+  const accessToken = decrypt(config.access_token)
+  const r = await sendIgTextMessage({
+    igUserId: config.instagram_business_account_id,
+    accessToken,
+    to: contact.instagram_id,
+    text: args.text,
+  })
+
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: args.accountId,
+    conversation_id: args.conversationId,
+    sender_type: 'bot',
+    content_type: 'text',
+    content_text: args.text,
+    message_id: r.messageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent to Instagram but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: args.text,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', args.conversationId)
+
+  return { whatsapp_message_id: r.messageId }
+}
+
 interface SendMediaEngineArgs {
   accountId: string
   userId: string
@@ -171,7 +253,17 @@ export async function engineSendMedia(
   args: SendMediaEngineArgs,
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
+  const channel = await resolveChannel(db, args.conversationId)
+  if (channel === 'instagram') {
+    return sendMediaViaInstagram(db, args)
+  }
+  return sendMediaViaWhatsApp(db, args)
+}
 
+async function sendMediaViaWhatsApp(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendMediaEngineArgs,
+): Promise<{ whatsapp_message_id: string }> {
   const { data: contact, error: contactErr } = await db
     .from('contacts')
     .select('id, phone')
@@ -233,10 +325,6 @@ export async function engineSendMedia(
     await db.from('contacts').update({ phone: workingPhone }).eq('id', contact.id)
   }
 
-  // content_type='image'|'video'|'document' — these are already in the
-  // messages_content_type_check constraint (migration 001 + 010).
-  // content_text carries the caption (or empty) so the conversation
-  // list preview shows something meaningful when the user glances at it.
   const preview = args.caption?.trim() || `[${args.kind}]`
   const { error: msgErr } = await db.from('messages').insert({
     account_id: args.accountId,
@@ -261,6 +349,67 @@ export async function engineSendMedia(
     .eq('id', args.conversationId)
 
   return { whatsapp_message_id: waMessageId }
+}
+
+async function sendMediaViaInstagram(
+  db: ReturnType<typeof supabaseAdmin>,
+  args: SendMediaEngineArgs,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, instagram_id')
+    .eq('id', args.contactId)
+    .eq('account_id', args.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.instagram_id) {
+    throw new Error('contact has no instagram_id for this account')
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('instagram_config')
+    .select('*')
+    .eq('account_id', args.accountId)
+    .single()
+  if (configErr || !config) {
+    throw new Error('Instagram not configured for this account')
+  }
+
+  const accessToken = decrypt(config.access_token)
+  const igKind: 'image' | 'video' | 'audio' | 'file' =
+    args.kind === 'document' ? 'file' : args.kind
+  const r = await sendIgMediaMessage({
+    igUserId: config.instagram_business_account_id,
+    accessToken,
+    to: contact.instagram_id,
+    kind: igKind,
+    link: args.link,
+    caption: args.caption,
+  })
+
+  const preview = args.caption?.trim() || `[${args.kind}]`
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: args.accountId,
+    conversation_id: args.conversationId,
+    sender_type: 'bot',
+    content_type: args.kind,
+    content_text: args.caption ?? null,
+    message_id: r.messageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent to Instagram but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: preview,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', args.conversationId)
+
+  return { whatsapp_message_id: r.messageId }
 }
 
 interface SendInteractiveButtonsEngineArgs {
@@ -321,10 +470,17 @@ async function sendInteractiveViaMeta(
   input: SendInput,
 ): Promise<{ whatsapp_message_id: string }> {
   const db = supabaseAdmin()
+  const channel = await resolveChannel(db, input.conversationId)
+  if (channel === 'instagram') {
+    return sendInteractiveViaInstagram(db, input)
+  }
+  return sendInteractiveViaWhatsApp(db, input)
+}
 
-  // Scope the contact + whatsapp_config lookups by account_id —
-  // same defense-in-depth rationale as automations/meta-send.ts.
-  // Migration 017 moved both tables to account-scoped tenancy.
+async function sendInteractiveViaWhatsApp(
+  db: ReturnType<typeof supabaseAdmin>,
+  input: SendInput,
+): Promise<{ whatsapp_message_id: string }> {
   const { data: contact, error: contactErr } = await db
     .from('contacts')
     .select('id, phone')
@@ -377,9 +533,6 @@ async function sendInteractiveViaMeta(
     return r.messageId
   }
 
-  // Same phone-variant retry as automations/meta-send.ts. Numbers
-  // registered with/without a trunk 0 + Meta's sandbox quirks all
-  // need this to reliably land a message.
   const variants = phoneVariants(sanitized)
   let workingPhone = sanitized
   let waMessageId = ''
@@ -402,15 +555,6 @@ async function sendInteractiveViaMeta(
     await db.from('contacts').update({ phone: workingPhone }).eq('id', contact.id)
   }
 
-  // Persist the bot's prompt to the messages table so it appears in
-  // the inbox. content_type='interactive' is supported as of
-  // migration 010; sender_type='bot' distinguishes flow sends from
-  // manual agent sends (the conversation list preview will pick up
-  // last_message_text as a sensible summary).
-  //
-  // We do NOT set interactive_reply_id here — that column is reserved
-  // for the customer's tap on this message, populated by the webhook
-  // when their reply arrives.
   const { error: msgErr } = await db.from('messages').insert({
     account_id: input.accountId,
     conversation_id: input.conversationId,
@@ -434,4 +578,94 @@ async function sendInteractiveViaMeta(
     .eq('id', input.conversationId)
 
   return { whatsapp_message_id: waMessageId }
+}
+
+async function sendInteractiveViaInstagram(
+  db: ReturnType<typeof supabaseAdmin>,
+  input: SendInput,
+): Promise<{ whatsapp_message_id: string }> {
+  const { data: contact, error: contactErr } = await db
+    .from('contacts')
+    .select('id, instagram_id')
+    .eq('id', input.contactId)
+    .eq('account_id', input.accountId)
+    .maybeSingle()
+  if (contactErr || !contact?.instagram_id) {
+    throw new Error('contact has no instagram_id for this account')
+  }
+
+  const { data: config, error: configErr } = await db
+    .from('instagram_config')
+    .select('*')
+    .eq('account_id', input.accountId)
+    .single()
+  if (configErr || !config) {
+    throw new Error('Instagram not configured for this account')
+  }
+
+  const accessToken = decrypt(config.access_token)
+  const igUserId = config.instagram_business_account_id
+  const to = contact.instagram_id
+
+  let igMessageId = ''
+
+  if (input.kind === 'buttons') {
+    const igButtons = input.buttons.slice(0, 3).map((b) => ({
+      type: 'postback' as const,
+      title: b.title,
+      payload: b.id,
+    }))
+    const r = await sendButtonTemplate({
+      igUserId,
+      accessToken,
+      to,
+      text: input.bodyText,
+      buttons: igButtons,
+    })
+    igMessageId = r.messageId
+  } else {
+    // send_list on Instagram: send body text + button template with
+    // first 3 options as postback buttons; remaining options listed in
+    // the header/footer text so the customer can see them.
+    const allOptions = input.sections.flatMap((s) => s.rows)
+    const igButtons = allOptions.slice(0, 3).map((row) => ({
+      type: 'postback' as const,
+      title: row.title,
+      payload: row.id,
+    }))
+    const extra = allOptions.slice(3).map((r) => r.title).join(', ')
+    const listText = extra ? `${input.bodyText}\n\n${extra}` : input.bodyText
+    const r = await sendButtonTemplate({
+      igUserId,
+      accessToken,
+      to,
+      text: listText.slice(0, 640),
+      buttons: igButtons,
+    })
+    igMessageId = r.messageId
+  }
+
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: input.accountId,
+    conversation_id: input.conversationId,
+    sender_type: 'bot',
+    content_type: 'interactive',
+    content_text: input.bodyText,
+    message_id: igMessageId,
+    status: 'sent',
+  })
+  if (msgErr) {
+    throw new Error(`sent to Instagram but DB insert failed: ${msgErr.message}`)
+  }
+
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: input.bodyText,
+      last_message_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', input.conversationId)
+
+  return { whatsapp_message_id: igMessageId }
 }

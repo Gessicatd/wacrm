@@ -534,6 +534,9 @@ export interface Automation {
   trigger_type: AutomationTriggerType;
   trigger_config: AutomationTriggerConfig;
   is_active: boolean;
+  /** NULL = fires on both channels. 'whatsapp' | 'instagram' scopes
+   *  this automation to only that channel's inbound webhooks. */
+  channel?: 'whatsapp' | 'instagram' | null;
   execution_count: number;
   last_executed_at?: string | null;
   created_at: string;

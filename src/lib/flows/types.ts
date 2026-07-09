@@ -238,6 +238,9 @@ export interface FlowRow {
   trigger_config: KeywordTriggerConfig | FirstInboundTriggerConfig | Record<string, unknown>;
   entry_node_id: string | null;
   fallback_policy: FlowFallbackPolicy;
+  /** NULL = fires on both channels. 'whatsapp' | 'instagram' scopes
+   *  this flow to only that channel's inbound webhooks. */
+  channel?: 'whatsapp' | 'instagram' | null;
   execution_count: number;
   last_executed_at: string | null;
   created_at: string;
@@ -339,6 +342,9 @@ export interface DispatchInboundInput {
   contactId: string;
   conversationId: string;
   message: ParsedInbound;
+  /** Channel the inbound message arrived on. Used to filter flows
+   *  scoped to a specific channel (NULL = both). */
+  channel?: 'whatsapp' | 'instagram';
 }
 
 export interface DispatchInboundResult {

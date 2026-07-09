@@ -497,6 +497,7 @@ async function processMessage(
     userId: configUserId,
     contactId,
     conversationId,
+    channel: 'instagram',
     message: interactiveReplyId
       ? {
           kind: 'interactive_reply',
@@ -534,6 +535,7 @@ async function processMessage(
       accountId,
       triggerType,
       contactId,
+      channel: 'instagram',
       context: {
         message_text: inboundText,
         conversation_id: conversationId,

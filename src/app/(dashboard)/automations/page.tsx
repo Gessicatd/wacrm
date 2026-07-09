@@ -315,6 +315,11 @@ function AutomationCard({
             >
               {meta.label}
             </span>
+            {automation.channel && (
+              <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[11px] font-medium bg-muted/50 text-muted-foreground">
+                {automation.channel === 'instagram' ? 'Instagram' : 'WhatsApp'}
+              </span>
+            )}
             <span className="tabular-nums">
               {t(automation.execution_count === 1 ? 'automations.run' : 'automations.runs', automation.execution_count)}
             </span>
