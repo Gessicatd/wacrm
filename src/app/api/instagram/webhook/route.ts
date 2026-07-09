@@ -14,9 +14,13 @@
 
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { decrypt } from '@/lib/whatsapp/encryption'
+import { decrypt, encrypt } from '@/lib/whatsapp/encryption'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
+import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { dispatchInboundToFlows } from '@/lib/flows/engine'
+import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { getIgUserProfile } from '@/lib/instagram/meta-api'
 
 // Lazy-initialized to avoid build-time crash when env vars are missing
 let _adminClient: any = null
@@ -39,6 +43,8 @@ export const maxDuration = 60
 //   ?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=<challenge>
 //
 // We match hub.verify_token against instagram_config.verify_token.
+// The verify_token is encrypted at rest (AES-256-GCM), mirroring the
+// WhatsApp pattern — decrypt each row to compare.
 // ============================================================
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -50,21 +56,57 @@ export async function GET(request: Request) {
     return new NextResponse('Bad request', { status: 400 })
   }
 
-  // Find the Instagram config whose verify_token matches.
   const db = supabaseAdmin()
-  const { data: config, error } = await db
+  const { data: configs, error } = await db
     .from('instagram_config')
     .select('id, account_id, instagram_business_account_id, verify_token')
-    .eq('verify_token', token)
-    .maybeSingle()
+    .not('verify_token', 'is', null)
 
-  if (error || !config) {
-    console.error('[instagram webhook] verify_token mismatch or no config found')
+  if (error || !configs || configs.length === 0) {
+    console.error('[instagram webhook] no config found for verification')
     return new NextResponse('Forbidden', { status: 403 })
   }
 
-  // Accept the challenge — Meta expects the raw challenge back as the response body.
-  return new NextResponse(challenge, { status: 200 })
+  let matchedConfig: any = null
+  for (const config of configs) {
+    if (!config.verify_token) continue
+    try {
+      if (decrypt(config.verify_token) === token) {
+        matchedConfig = config
+        break
+      }
+    } catch {
+      // Malformed / wrong-key token row — skip it and keep checking.
+    }
+  }
+
+  if (!matchedConfig) {
+    console.error('[instagram webhook] verify_token mismatch')
+    return new NextResponse('Forbidden', { status: 403 })
+  }
+
+  // Also upgrade any row still storing verify_token in plaintext
+  // (migration path for configs saved before Correction #1).
+  if (!isLikelyEncrypted(matchedConfig.verify_token)) {
+    void db
+      .from('instagram_config')
+      .update({ verify_token: encrypt(token) })
+      .eq('id', matchedConfig.id)
+      .then(({ error: upgradeErr }: { error: unknown }) => {
+        if (upgradeErr) {
+          console.warn('[instagram webhook] verify_token encryption upgrade failed:', upgradeErr)
+        }
+      })
+  }
+
+  return new Response(challenge, {
+    status: 200,
+    headers: { 'Content-Type': 'text/plain' },
+  })
+}
+
+function isLikelyEncrypted(value: string): boolean {
+  return value.includes(':') && value.length >= 64
 }
 
 // ============================================================
@@ -76,7 +118,10 @@ export async function POST(request: Request) {
   const rawBody = await request.text()
   const signature = request.headers.get('x-hub-signature-256')
 
-  if (!verifyMetaWebhookSignature(rawBody, signature)) {
+  console.log('[instagram webhook] POST received, verifying with',
+    process.env.INSTAGRAM_APP_SECRET ? 'INSTAGRAM_APP_SECRET' : 'META_APP_SECRET (fallback)')
+
+  if (!verifyMetaWebhookSignature(rawBody, signature, process.env.INSTAGRAM_APP_SECRET)) {
     console.warn('[instagram webhook] rejected request with invalid signature')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
@@ -178,10 +223,20 @@ async function processInstagramWebhook(body: InstagramWebhookPayload) {
       .maybeSingle()
 
     if (configError || !config) {
+      const { data: allConfigs } = await db
+        .from('instagram_config')
+        .select('instagram_business_account_id, account_id, status')
+
       console.error(
         '[instagram webhook] no config found for ig_user_id:',
         recipientIgUserId,
-        configError ? `error: ${configError.message}` : '',
+        configError ? `error: ${configError.message}` : 'no matching row',
+        '| All configured IG accounts:',
+        allConfigs?.map((c: { instagram_business_account_id: string; account_id: string; status: string }) => ({
+          id: c.instagram_business_account_id,
+          account: c.account_id,
+          status: c.status,
+        })) ?? 'none',
       )
       continue
     }
@@ -206,7 +261,6 @@ async function processMessage(
   const db = supabaseAdmin()
   const msg = item.message!
   const senderId = item.sender.id
-  const recipientId = item.recipient.id
   const accountId = config.account_id
   const configUserId = config.user_id
 
@@ -225,8 +279,19 @@ async function processMessage(
   let contentType: string
   let contentText: string | null
   let mediaUrl: string | null
+  let interactiveReplyId: string | null = null
 
-  if (msg.is_unsupported) {
+  if (msg.quick_reply) {
+    // Postback button tap — Instagram sends quick_reply.payload
+    // instead of message.text. Treat as interactive_reply so the
+    // Flows engine can route on the payload and the inbox renders
+    // a meaningful bubble (mirrors WhatsApp's interactive handling).
+    contentType = 'interactive'
+    contentText = msg.quick_reply.payload
+    mediaUrl = null
+    interactiveReplyId = msg.quick_reply.payload
+    console.log('[instagram webhook] postback quick_reply:', msg.quick_reply.payload)
+  } else if (msg.is_unsupported) {
     contentType = 'text'
     contentText = '[Unsupported message type]'
     mediaUrl = null
@@ -242,7 +307,7 @@ async function processMessage(
   }
 
   // Valid content types for the DB constraint.
-  const validTypes = ['text', 'image', 'video', 'audio', 'document']
+  const validTypes = ['text', 'image', 'video', 'audio', 'document', 'interactive']
   if (!validTypes.includes(contentType)) {
     contentType = 'text'
   }
@@ -250,12 +315,14 @@ async function processMessage(
   // Find or create contact by instagram_id within the account.
   const { data: existingContact } = await db
     .from('contacts')
-    .select('id')
+    .select('id, name, instagram_username, avatar_url')
     .eq('account_id', accountId)
     .eq('instagram_id', senderId)
     .maybeSingle()
 
   let contactId: string
+  let contactWasCreated = false
+
   if (existingContact) {
     contactId = existingContact.id
   } else {
@@ -275,6 +342,41 @@ async function processMessage(
       return
     }
     contactId = newContact.id
+    contactWasCreated = true
+  }
+
+  // Fetch Instagram profile to populate name/username if missing.
+  // The webhook only delivers sender.id (IGSID) — unlike WhatsApp
+  // which includes profile.name in the payload. We call the Instagram
+  // User Profile API once per new contact (or when fields are empty)
+  // to resolve human-readable names.
+  const hasName = existingContact?.name
+  const hasUsername = existingContact?.instagram_username
+  if (contactWasCreated || !hasName || !hasUsername) {
+    try {
+      const rawToken = decrypt(config.access_token)
+      const profile = await getIgUserProfile(senderId, rawToken)
+
+      const updates: Record<string, unknown> = {}
+      if (profile.name && !hasName) updates.name = profile.name
+      if (profile.username && !hasUsername) updates.instagram_username = profile.username
+      if (profile.profile_pic && !existingContact?.avatar_url) {
+        updates.avatar_url = profile.profile_pic
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db.from('contacts').update(updates).eq('id', contactId)
+        if (updates.name) {
+          console.log('[instagram webhook] resolved contact name:', updates.name, '@' + (updates.instagram_username ?? '?'))
+        }
+      }
+    } catch (err) {
+      console.warn(
+        '[instagram webhook] profile fetch failed for IGSID:',
+        senderId,
+        err instanceof Error ? err.message : err,
+      )
+    }
   }
 
   // Find or create conversation with channel='instagram'.
@@ -312,6 +414,28 @@ async function processMessage(
     conversationCreated = true
   }
 
+  // Emit conversation.created as soon as the thread is opened — before
+  // the message insert — so a subscriber always sees the thread open
+  // before its first message.received (mirrors WhatsApp pattern).
+  if (conversationCreated) {
+    await dispatchWebhookEvent(db, accountId, 'conversation.created', {
+      conversation_id: conversationId,
+      contact_id: contactId,
+      channel: 'instagram',
+    })
+  }
+
+  // Determine whether this is the contact's very first inbound message
+  // BEFORE we insert, so the count is accurate. Covers the case where
+  // the contact row already exists (manual add / CSV import) but they've
+  // never messaged us before.
+  const { count: priorCustomerMsgCount } = await db
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+  const isFirstInboundMessage = (priorCustomerMsgCount ?? 0) === 0
+
   // Insert the message.
   const msgPayload: Record<string, unknown> = {
     account_id: accountId,
@@ -322,6 +446,7 @@ async function processMessage(
     media_url: mediaUrl,
     message_id: msg.mid,
     status: 'delivered',
+    interactive_reply_id: interactiveReplyId,
     created_at: new Date(item.timestamp * 1000).toISOString(),
   }
 
@@ -357,15 +482,80 @@ async function processMessage(
     })
     .eq('id', conversationId)
 
-  // Emit webhook event for external integrations (n8n, AI agents, etc.).
-  if (conversationCreated) {
-    await dispatchWebhookEvent(db, accountId, 'conversation.created', {
-      conversation_id: conversationId,
-      contact_id: contactId,
-      channel: 'instagram',
+  // ============================================================
+  // Flow runner dispatch (mirrors WhatsApp pattern).
+  //
+  // If the runner consumes the message (it either advanced an active
+  // run or started a new one), we suppress the content-level automation
+  // triggers (new_message_received, keyword_match) for this inbound.
+  // Relationship-level triggers (new_contact_created, first_inbound_message)
+  // still fire even when consumed.
+  // ============================================================
+  const inboundText = contentText ?? msg.text ?? ''
+  const flowResult = await dispatchInboundToFlows({
+    accountId,
+    userId: configUserId,
+    contactId,
+    conversationId,
+    message: interactiveReplyId
+      ? {
+          kind: 'interactive_reply',
+          reply_id: interactiveReplyId,
+          reply_title: inboundText,
+          meta_message_id: msg.mid,
+        }
+      : {
+          kind: 'text',
+          text: inboundText,
+          meta_message_id: msg.mid,
+        },
+    isFirstInboundMessage,
+  })
+  const flowConsumed = flowResult.consumed
+
+  // ============================================================
+  // Automation triggers (mirrors WhatsApp pattern).
+  // ============================================================
+  const automationTriggers: (
+    | 'new_contact_created'
+    | 'first_inbound_message'
+    | 'new_message_received'
+    | 'keyword_match'
+  )[] = []
+
+  if (!flowConsumed) {
+    automationTriggers.push('new_message_received', 'keyword_match')
+  }
+  if (contactWasCreated) automationTriggers.unshift('new_contact_created')
+  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+
+  for (const triggerType of automationTriggers) {
+    runAutomationsForTrigger({
+      accountId,
+      triggerType,
+      contactId,
+      context: {
+        message_text: inboundText,
+        conversation_id: conversationId,
+      },
+    }).catch((err) => console.error('[instagram automations] dispatch failed:', err))
+  }
+
+  // ============================================================
+  // AI auto-reply (mirrors WhatsApp pattern).
+  // ============================================================
+  if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
+    await dispatchInboundToAiReply({
+      accountId,
+      conversationId,
+      contactId,
+      configOwnerUserId: configUserId,
     })
   }
 
+  // ============================================================
+  // message.received webhook (public API).
+  // ============================================================
   await dispatchWebhookEvent(db, accountId, 'message.received', {
     message_id: msg.mid,
     conversation_id: conversationId,

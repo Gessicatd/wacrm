@@ -83,7 +83,7 @@ export async function sendTextMessage(
 // Send media message
 // ============================================================
 
-export type MediaKind = 'image' | 'video' | 'audio'
+export type MediaKind = 'image' | 'video' | 'audio' | 'file'
 
 export interface SendMediaMessageArgs {
   igUserId: string
@@ -97,11 +97,15 @@ export interface SendMediaMessageArgs {
 }
 
 /**
- * Send a media message (image, video, or audio) via the Instagram API.
+ * Send a media message (image, video, audio, or file) via the Instagram API.
  *
  * POST /{ig-user-id}/messages
  *   { recipient: { id: "<IGSID>" },
  *     message: { attachment: { type: "<kind>", payload: { url: "..." } } } }
+ *
+ * For image/video/audio, `is_reusable: true` is included so the media can be
+ * re-sent without re-uploading. For files (PDFs, etc.), `is_reusable` is
+ * omitted — Instagram's file attachment format does not support it.
  */
 export async function sendMediaMessage(
   args: SendMediaMessageArgs,
@@ -109,12 +113,17 @@ export async function sendMediaMessage(
   const { igUserId, accessToken, to, kind, link, caption } = args
   const url = `${INSTAGRAM_API_BASE}/${igUserId}/messages`
 
+  const payload: Record<string, unknown> = { url: link }
+  if (kind === 'image' || kind === 'video') {
+    payload.is_reusable = true
+  }
+
   const body: Record<string, unknown> = {
     recipient: { id: to },
     message: {
       attachment: {
         type: kind,
-        payload: { url: link, is_reusable: true },
+        payload,
       },
     },
   }
@@ -221,4 +230,113 @@ export async function getSubscribedIgApps(
   }
 
   return response.json()
+}
+
+// ============================================================
+// Get Instagram user profile by IGSID
+// ============================================================
+
+export interface IgUserProfile {
+  name?: string
+  username?: string
+  profile_pic?: string
+}
+
+/**
+ * Fetch an Instagram user's profile by their IGSID (Instagram Scoped ID).
+ *
+ * The Instagram Messaging webhook only delivers sender.id (the IGSID) —
+ * unlike WhatsApp which includes profile.name in the payload. This
+ * function calls the Instagram User Profile API to resolve the human-
+ * readable name and username so contacts aren't displayed as raw IDs.
+ *
+ * GET /{igsid}?fields=name,username,profile_pic
+ *
+ * Reference:
+ *   https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/user-profile
+ */
+export async function getIgUserProfile(
+  igsid: string,
+  accessToken: string,
+): Promise<IgUserProfile> {
+  const url = `${INSTAGRAM_API_BASE}/${igsid}?fields=name,username,profile_pic&access_token=${accessToken}`
+
+  const response = await fetch(url)
+
+  if (!response.ok) {
+    console.warn(
+      `[instagram] could not fetch profile for IGSID ${igsid}:`,
+      response.status,
+    )
+    return {}
+  }
+
+  const data = await response.json()
+  return {
+    name: data.name ?? undefined,
+    username: data.username ?? undefined,
+    profile_pic: data.profile_pic ?? undefined,
+  }
+}
+
+// ============================================================
+// Send button template message
+// ============================================================
+
+export interface SendButtonTemplateArgs {
+  igUserId: string
+  accessToken: string
+  to: string
+  /** Template body text (max 640 chars). */
+  text: string
+  /** 1–3 buttons. */
+  buttons: { type: 'web_url' | 'postback'; title: string; url?: string; payload?: string }[]
+}
+
+/**
+ * Send a button template message via the Instagram API.
+ *
+ * Button templates render as interactive CTA buttons in Instagram DM —
+ * a better UX than raw URL links for documents, forms, etc.
+ *
+ * POST /{ig-user-id}/messages
+ *
+ * Reference:
+ *   https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/messaging-api/button-template
+ */
+export async function sendButtonTemplate(
+  args: SendButtonTemplateArgs,
+): Promise<InstagramSendResult> {
+  const { igUserId, accessToken, to, text, buttons } = args
+  const url = `${INSTAGRAM_API_BASE}/${igUserId}/messages`
+
+  const body = {
+    recipient: { id: to },
+    message: {
+      attachment: {
+        type: 'template',
+        payload: {
+          template_type: 'button',
+          text,
+          buttons,
+        },
+      },
+    },
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    await throwInstagramError(response, `Instagram API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return { messageId: data.message_id }
 }

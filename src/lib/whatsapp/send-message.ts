@@ -30,6 +30,7 @@ import {
 import {
   sendTextMessage as sendInstagramText,
   sendMediaMessage as sendInstagramMedia,
+  sendButtonTemplate as sendInstagramButton,
   type MediaKind as InstagramMediaKind,
 } from '@/lib/instagram/meta-api';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
@@ -535,8 +536,30 @@ async function sendInstagramMessage(
         caption: contentText || undefined,
       });
       igMessageId = result.messageId;
+    } else if (messageType === 'document') {
+      if (!mediaUrl) {
+        throw new SendMessageError(
+          'bad_request',
+          'Media URL required for document messages',
+          400,
+        );
+      }
+      // Documents/PDFs render better as a button template on Instagram
+      // — the recipient sees a clear CTA button instead of a raw link.
+      const buttonLabel = contentText ? 'Download' : 'Open file'
+      const buttonText = contentText || 'File attached'
+      const result = await sendInstagramButton({
+        igUserId,
+        accessToken,
+        to: igRecipientId,
+        text: buttonText,
+        buttons: [
+          { type: 'web_url', url: mediaUrl, title: buttonLabel },
+        ],
+      });
+      igMessageId = result.messageId;
     } else {
-      // document or unsupported — fall back to text with a note.
+      // Unsupported message type — fall back to text with a note.
       const result = await sendInstagramText({
         igUserId,
         accessToken,

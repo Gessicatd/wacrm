@@ -21,13 +21,16 @@ import crypto from 'node:crypto'
 export function verifyMetaWebhookSignature(
   rawBody: string,
   signatureHeader: string | null,
+  secretOverride?: string,
 ): boolean {
-  const secret = process.env.META_APP_SECRET
+  const secret = secretOverride ?? process.env.META_APP_SECRET
   if (!secret) {
+    const label = secretOverride
+      ? 'INSTAGRAM_APP_SECRET (nor META_APP_SECRET) is not set'
+      : 'META_APP_SECRET is not set'
     console.error(
-      '[webhook] META_APP_SECRET is not set — rejecting request. ' +
-        'Configure the env var (Meta → App Settings → Basic → App Secret) ' +
-        'to enable signature verification.',
+      `[webhook] ${label} — rejecting request. ` +
+        'Configure the env var to enable signature verification.',
     )
     return false
   }

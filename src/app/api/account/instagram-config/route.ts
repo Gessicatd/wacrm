@@ -128,7 +128,7 @@ export async function PUT(request: Request) {
         user_id: ctx.userId,
         access_token: encryptedToken,
         instagram_business_account_id: body.instagram_business_account_id,
-        verify_token: body.verify_token || null,
+        verify_token: body.verify_token ? encrypt(body.verify_token) : null,
         business_name: businessName,
         status: "connected",
         connected_at: new Date().toISOString(),
@@ -170,12 +170,28 @@ export async function PUT(request: Request) {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       console.error("[PUT /api/account/instagram-config] subscribe error:", message);
-      subscriptionError = message;
+
+      // Provide actionable context for the most common failure modes.
+      let detail = message;
+      if (message.includes("permission") || message.includes("OAuth")) {
+        detail =
+          `${message}. Ensure the Access Token includes ` +
+          `instagram_business_basic, instagram_business_manage_messages, ` +
+          `pages_manage_metadata, and pages_show_list. ` +
+          `Also confirm the Instagram Business Account is linked to a Facebook ` +
+          `Page the token owner has a role on.`;
+      } else if (message.includes("Application")) {
+        detail =
+          `${message}. Make sure the Meta App is in Live mode and the ` +
+          `Instagram webhook product is configured in the App Dashboard ` +
+          `(callback URL + verify token + messages field subscribed).`;
+      }
+      subscriptionError = detail;
 
       await ctx.supabase
         .from("instagram_config")
         .update({
-          last_registration_error: message,
+          last_registration_error: detail,
         })
         .eq("account_id", ctx.accountId);
     }

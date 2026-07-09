@@ -570,7 +570,7 @@ export function InstagramConfig() {
                     <ol className="list-decimal list-inside space-y-1 text-sm">
                       <li>In Meta Developer Console, go to <strong className="text-foreground">Instagram Graph API &gt; API Setup</strong></li>
                       <li>Generate a <strong className="text-foreground">User Access Token</strong> with permissions:
-                        <code className="block mt-1 text-xs bg-muted px-2 py-1 rounded">instagram_basic, instagram_manage_messages, pages_manage_metadata</code>
+                        <code className="block mt-1 text-xs bg-muted px-2 py-1 rounded">instagram_business_basic, instagram_business_manage_messages, pages_manage_metadata, pages_show_list</code>
                       </li>
                       <li>Copy your <strong className="text-foreground">Instagram Business Account ID</strong></li>
                       <li>If the token expires, generate a <strong className="text-foreground">long-lived token</strong> (60 days) or a <strong className="text-foreground">Page Token</strong></li>
