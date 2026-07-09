@@ -1,15 +1,17 @@
 // ============================================================
 // GET /api/instagram/webhook  — Meta webhook verification handshake
-// POST /api/instagram/webhook — Receive Instagram DM events
+// POST /api/instagram/webhook — Receive Instagram DM + comment events
 //
 // Mirrors the WhatsApp webhook pattern in
 // src/app/api/whatsapp/webhook/route.ts but for the Instagram
 // Messaging API.
 //
 // Instagram sends webhook payloads with this shape:
-//   { object: "instagram", entry: [{ id, time, messaging: [...] }] }
+//   Messages —  { object: "instagram", entry: [{ id, time, messaging: [...] }] }
+//   Comments —  { object: "instagram", entry: [{ id, time, changes: [{ field: "comments", value: {...} }] }] }
 //
 // Each messaging item describes one inbound DM.
+// Each changes item describes a comment on a post.
 // ============================================================
 
 import { NextResponse, after } from 'next/server'
@@ -157,7 +159,21 @@ interface InstagramWebhookPayload {
 interface InstagramEntry {
   id: string
   time: number
-  messaging: InstagramMessagingItem[]
+  messaging?: InstagramMessagingItem[]
+  changes?: InstagramChangeItem[]
+}
+
+interface InstagramChangeItem {
+  field: string
+  value: InstagramCommentValue
+}
+
+interface InstagramCommentValue {
+  from: { id: string; username?: string }
+  comment_id: string
+  parent_id?: string
+  text: string
+  media: { id: string; media_product_type?: string }
 }
 
 interface InstagramMessagingItem {
@@ -197,6 +213,20 @@ async function processInstagramWebhook(body: InstagramWebhookPayload) {
   console.log('[instagram webhook] received', body.entry.length, 'entries')
 
   for (const entry of body.entry) {
+    // ---- Comments events (post comments) ----
+    if (entry.changes && entry.changes.length > 0) {
+      for (const change of entry.changes) {
+        if (change.field !== 'comments') continue
+        try {
+          await processComment(change.value, entry.id)
+        } catch (err) {
+          console.error('[instagram webhook] error processing comment:', err)
+        }
+      }
+      continue
+    }
+
+    // ---- DM messaging events ----
     if (!entry.messaging || entry.messaging.length === 0) {
       console.log('[instagram webhook] entry', entry.id, 'has no messaging items')
       continue
@@ -568,6 +598,238 @@ async function processMessage(
     media_url: mediaUrl,
     sender: { id: senderId },
   })
+}
+
+// ============================================================
+// Comment processing (post comment → DM flow)
+// ============================================================
+
+async function processComment(
+  comment: InstagramCommentValue,
+  igUserId: string,
+) {
+  const db = supabaseAdmin()
+  const senderId = comment.from.id
+  const senderUsername = comment.from.username
+
+  console.log('[instagram webhook] processing comment',
+    'comment_id:', comment.comment_id,
+    'from:', senderId,
+    'text:', comment.text?.substring(0, 100))
+
+  // Find Instagram config by business account ID.
+  const { data: config, error: configError } = await db
+    .from('instagram_config')
+    .select('*')
+    .eq('instagram_business_account_id', igUserId)
+    .maybeSingle()
+
+  if (configError || !config) {
+    const { data: allConfigs } = await db
+      .from('instagram_config')
+      .select('instagram_business_account_id, account_id, status')
+
+    console.error(
+      '[instagram webhook] no config found for comment target:',
+      igUserId,
+      configError ? `error: ${configError.message}` : 'no matching row',
+      '| All configured IG accounts:',
+      allConfigs?.map((c: { instagram_business_account_id: string; account_id: string; status: string }) => ({
+        id: c.instagram_business_account_id,
+        account: c.account_id,
+        status: c.status,
+      })) ?? 'none',
+    )
+    return
+  }
+
+  const accountId = config.account_id
+  const configUserId = config.user_id
+
+  // Find or create contact by instagram_id.
+  const { data: existingContact } = await db
+    .from('contacts')
+    .select('id, name, instagram_username, avatar_url')
+    .eq('account_id', accountId)
+    .eq('instagram_id', senderId)
+    .maybeSingle()
+
+  let contactId: string
+  let contactWasCreated = false
+
+  if (existingContact) {
+    contactId = existingContact.id
+  } else {
+    const { data: newContact, error: createErr } = await db
+      .from('contacts')
+      .insert({
+        account_id: accountId,
+        user_id: configUserId,
+        instagram_id: senderId,
+        phone: null,
+      })
+      .select('id')
+      .single()
+
+    if (createErr || !newContact) {
+      console.error('[instagram webhook] comment contact insert error:', createErr)
+      return
+    }
+    contactId = newContact.id
+    contactWasCreated = true
+  }
+
+  // Resolve profile name/username if missing.
+  const hasName = existingContact?.name
+  const hasUsername = existingContact?.instagram_username
+  if (contactWasCreated || !hasName || !hasUsername) {
+    try {
+      const rawToken = decrypt(config.access_token)
+      const profile = await getIgUserProfile(senderId, rawToken)
+
+      const updates: Record<string, unknown> = {}
+      if (profile.name && !hasName) updates.name = profile.name
+      if (profile.username && !hasUsername) updates.instagram_username = profile.username
+      if (profile.profile_pic && !existingContact?.avatar_url) {
+        updates.avatar_url = profile.profile_pic
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await db.from('contacts').update(updates).eq('id', contactId)
+      }
+    } catch {
+      console.warn('[instagram webhook] profile fetch failed for commenter:', senderId)
+    }
+  }
+
+  // Find or create conversation with channel='instagram'.
+  const { data: existingConv } = await db
+    .from('conversations')
+    .select('id, unread_count')
+    .eq('account_id', accountId)
+    .eq('contact_id', contactId)
+    .eq('channel', 'instagram')
+    .maybeSingle()
+
+  let conversationId: string
+
+  if (existingConv) {
+    conversationId = existingConv.id
+  } else {
+    const { data: newConv, error: convErr } = await db
+      .from('conversations')
+      .insert({
+        account_id: accountId,
+        user_id: configUserId,
+        contact_id: contactId,
+        channel: 'instagram',
+        status: 'open',
+      })
+      .select('id')
+      .single()
+
+    if (convErr || !newConv) {
+      console.error('[instagram webhook] comment conversation insert error:', convErr)
+      return
+    }
+    conversationId = newConv.id
+  }
+
+  // Check if this is the contact's first inbound.
+  const { count: priorCustomerMsgCount } = await db
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+  const isFirstInboundMessage = (priorCustomerMsgCount ?? 0) === 0
+
+  const contentText = `Comment: ${comment.text}`
+
+  // Insert the comment as an inbound message with instagram_comment_id.
+  const { error: msgErr } = await db.from('messages').insert({
+    account_id: accountId,
+    conversation_id: conversationId,
+    sender_type: 'customer',
+    content_type: 'text',
+    content_text: contentText,
+    message_id: `ig_comment_${comment.comment_id}`,
+    instagram_comment_id: comment.comment_id,
+    status: 'delivered',
+    created_at: new Date().toISOString(),
+  })
+
+  if (msgErr) {
+    console.error('[instagram webhook] comment message insert error:', msgErr)
+    return
+  }
+
+  // Bump conversation.
+  const unreadCount = existingConv?.unread_count ?? 0
+  await db
+    .from('conversations')
+    .update({
+      last_message_text: senderUsername
+        ? `Comment from @${senderUsername}: ${comment.text}`
+        : contentText,
+      last_message_at: new Date().toISOString(),
+      unread_count: unreadCount + 1,
+    })
+    .eq('id', conversationId)
+
+  const inboundText = comment.text
+
+  // Flow dispatch.
+  const flowResult = await dispatchInboundToFlows({
+    accountId,
+    userId: configUserId,
+    contactId,
+    conversationId,
+    channel: 'instagram',
+    message: {
+      kind: 'text',
+      text: contentText,
+      meta_message_id: `ig_comment_${comment.comment_id}`,
+    },
+    isFirstInboundMessage,
+  })
+  const flowConsumed = flowResult.consumed
+
+  // Automation triggers.
+  const automationTriggers: (
+    | 'new_contact_created'
+    | 'first_inbound_message'
+    | 'new_message_received'
+    | 'keyword_match'
+  )[] = []
+
+  if (!flowConsumed) {
+    automationTriggers.push('new_message_received', 'keyword_match')
+  }
+  if (contactWasCreated) automationTriggers.unshift('new_contact_created')
+  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message')
+
+  for (const triggerType of automationTriggers) {
+    runAutomationsForTrigger({
+      accountId,
+      triggerType,
+      contactId,
+      channel: 'instagram',
+      context: {
+        message_text: comment.text,
+        conversation_id: conversationId,
+      },
+    }).catch((err) => console.error('[instagram comment automations] dispatch failed:', err))
+  }
+
+  // AI auto-reply for comment text.
+  if (!flowConsumed && inboundText.trim()) {
+    await dispatchInboundToAiReply({
+      accountId,
+      conversationId,
+      contactId,
+      configOwnerUserId: configUserId,
+    })
+  }
 }
 
 // ============================================================

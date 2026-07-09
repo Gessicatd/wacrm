@@ -186,7 +186,7 @@ export async function verifyIgAccount(
 /**
  * Subscribe the Instagram Business Account to webhook events.
  *
- * POST /{ig-user-id}/subscribed_apps?subscribed_fields=messages
+ * POST /{ig-user-id}/subscribed_apps?subscribed_fields=messages,comments
  *
  * This is the Instagram equivalent of WhatsApp's `/register` +
  * `/subscribed_apps`. Without it, Meta won't deliver webhook
@@ -196,7 +196,7 @@ export async function subscribeIgApp(
   igUserId: string,
   accessToken: string,
 ): Promise<{ success: boolean }> {
-  const url = `${INSTAGRAM_API_BASE}/${igUserId}/subscribed_apps?subscribed_fields=messages&access_token=${accessToken}`
+  const url = `${INSTAGRAM_API_BASE}/${igUserId}/subscribed_apps?subscribed_fields=messages,comments&access_token=${accessToken}`
 
   const response = await fetch(url, {
     method: 'POST',
@@ -335,6 +335,60 @@ export async function sendButtonTemplate(
 
   if (!response.ok) {
     await throwInstagramError(response, `Instagram API error: ${response.status}`)
+  }
+
+  const data = await response.json()
+  return { messageId: data.message_id }
+}
+
+// ============================================================
+// Send private reply to a commenter (comment → DM)
+// ============================================================
+
+export interface SendPrivateReplyArgs {
+  igUserId: string
+  accessToken: string
+  /** The comment_id from the comments webhook payload. */
+  commentId: string
+  /** Reply text sent as a DM to the commenter. */
+  text: string
+}
+
+/**
+ * Send a private reply (DM) to a user who commented on a post.
+ *
+ * POST /{ig-user-id}/messages
+ *   { recipient: { comment_id: "<id>" }, message: { text: "..." } }
+ *
+ * Unlike a normal DM send which uses `recipient.id` (IGSID), this
+ * uses `recipient.comment_id` so Instagram routes the message to the
+ * commenter's inbox automatically.
+ *
+ * Reference:
+ *   https://developers.facebook.com/docs/instagram-platform/private-replies
+ */
+export async function sendPrivateReply(
+  args: SendPrivateReplyArgs,
+): Promise<InstagramSendResult> {
+  const { igUserId, accessToken, commentId, text } = args
+  const url = `${INSTAGRAM_API_BASE}/${igUserId}/messages`
+
+  const body = {
+    recipient: { comment_id: commentId },
+    message: { text },
+  }
+
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    await throwInstagramError(response, `Instagram private reply error: ${response.status}`)
   }
 
   const data = await response.json()

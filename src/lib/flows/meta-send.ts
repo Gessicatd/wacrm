@@ -11,6 +11,7 @@ import {
   sendTextMessage as sendIgTextMessage,
   sendMediaMessage as sendIgMediaMessage,
   sendButtonTemplate,
+  sendPrivateReply,
 } from '@/lib/instagram/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
@@ -45,6 +46,29 @@ async function resolveChannel(
     .eq('id', conversationId)
     .maybeSingle()
   return (conv?.channel as 'whatsapp' | 'instagram') || 'whatsapp'
+}
+
+/**
+ * Check whether this conversation's most recent customer message has an
+ * `instagram_comment_id` — meaning the thread was triggered by a post
+ * comment. When set, outbound sends route through the private-reply API
+ * (using comment_id as the recipient handle) instead of the normal DM
+ * send (using the IGSID).
+ */
+async function resolveCommentId(
+  db: ReturnType<typeof supabaseAdmin>,
+  conversationId: string,
+): Promise<string | null> {
+  const { data: lastCustomerMsg } = await db
+    .from('messages')
+    .select('instagram_comment_id')
+    .eq('conversation_id', conversationId)
+    .eq('sender_type', 'customer')
+    .not('instagram_comment_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return (lastCustomerMsg?.instagram_comment_id as string) ?? null
 }
 
 interface SendTextEngineArgs {
@@ -195,12 +219,18 @@ async function sendTextViaInstagram(
   }
 
   const accessToken = decrypt(config.access_token)
-  const r = await sendIgTextMessage({
-    igUserId: config.instagram_business_account_id,
-    accessToken,
-    to: contact.instagram_id,
-    text: args.text,
-  })
+  const igUserId = config.instagram_business_account_id
+
+  const commentId = await resolveCommentId(db, args.conversationId)
+
+  const r = commentId
+    ? await sendPrivateReply({ igUserId, accessToken, commentId, text: args.text })
+    : await sendIgTextMessage({
+        igUserId,
+        accessToken,
+        to: contact.instagram_id,
+        text: args.text,
+      })
 
   const { error: msgErr } = await db.from('messages').insert({
     account_id: args.accountId,
@@ -375,16 +405,27 @@ async function sendMediaViaInstagram(
   }
 
   const accessToken = decrypt(config.access_token)
+  const igUserId = config.instagram_business_account_id
   const igKind: 'image' | 'video' | 'audio' | 'file' =
     args.kind === 'document' ? 'file' : args.kind
-  const r = await sendIgMediaMessage({
-    igUserId: config.instagram_business_account_id,
-    accessToken,
-    to: contact.instagram_id,
-    kind: igKind,
-    link: args.link,
-    caption: args.caption,
-  })
+
+  const commentId = await resolveCommentId(db, args.conversationId)
+
+  const r = commentId
+    ? await sendPrivateReply({
+        igUserId,
+        accessToken,
+        commentId,
+        text: args.caption ?? `Media: ${args.kind}`,
+      })
+    : await sendIgMediaMessage({
+        igUserId,
+        accessToken,
+        to: contact.instagram_id,
+        kind: igKind,
+        link: args.link,
+        caption: args.caption,
+      })
 
   const preview = args.caption?.trim() || `[${args.kind}]`
   const { error: msgErr } = await db.from('messages').insert({
@@ -607,9 +648,22 @@ async function sendInteractiveViaInstagram(
   const igUserId = config.instagram_business_account_id
   const to = contact.instagram_id
 
+  const commentId = await resolveCommentId(db, input.conversationId)
+
   let igMessageId = ''
 
-  if (input.kind === 'buttons') {
+  if (commentId) {
+    // Private reply — interactive buttons/list don't apply to comment
+    // replies. Send the body text as a plain-text DM via the private-
+    // reply API so the commenter still receives a response.
+    const r = await sendPrivateReply({
+      igUserId,
+      accessToken,
+      commentId,
+      text: input.bodyText,
+    })
+    igMessageId = r.messageId
+  } else if (input.kind === 'buttons') {
     const igButtons = input.buttons.slice(0, 3).map((b) => ({
       type: 'postback' as const,
       title: b.title,

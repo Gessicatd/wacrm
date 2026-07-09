@@ -1,5 +1,5 @@
 import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
-import { sendTextMessage as sendIgTextMessage, sendButtonTemplate } from '@/lib/instagram/meta-api'
+import { sendTextMessage as sendIgTextMessage, sendButtonTemplate, sendPrivateReply } from '@/lib/instagram/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   sanitizePhoneForMeta,
@@ -223,11 +223,49 @@ async function sendViaInstagramAPI(
   }
 
   const accessToken = decrypt(config.access_token)
+  const igUserId = config.instagram_business_account_id
+
+  // Check if this conversation was triggered by a comment (the most
+  // recent customer message has instagram_comment_id). If so, route
+  // through the private-reply API using comment_id instead of IGSID.
+  const { data: lastCustomerMsg } = await db
+    .from('messages')
+    .select('instagram_comment_id')
+    .eq('conversation_id', input.conversationId)
+    .eq('sender_type', 'customer')
+    .not('instagram_comment_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  const commentId = lastCustomerMsg?.instagram_comment_id as string | undefined
 
   let igMessageId = ''
-  if (input.kind === 'template') {
+  if (commentId) {
+    // Private reply to the commenter — Instagram routes the DM to the
+    // commenter's inbox using the comment_id as the recipient handle.
+    if (input.kind === 'template') {
+      igMessageId = (
+        await sendPrivateReply({
+          igUserId,
+          accessToken,
+          commentId,
+          text: input.templateName,
+        })
+      ).messageId
+    } else {
+      igMessageId = (
+        await sendPrivateReply({
+          igUserId,
+          accessToken,
+          commentId,
+          text: input.text,
+        })
+      ).messageId
+    }
+  } else if (input.kind === 'template') {
     const r = await sendButtonTemplate({
-      igUserId: config.instagram_business_account_id,
+      igUserId,
       accessToken,
       to: contact.instagram_id,
       text: input.templateName,
@@ -236,7 +274,7 @@ async function sendViaInstagramAPI(
     igMessageId = r.messageId
   } else {
     const r = await sendIgTextMessage({
-      igUserId: config.instagram_business_account_id,
+      igUserId,
       accessToken,
       to: contact.instagram_id,
       text: input.text,
