@@ -362,7 +362,6 @@ async function processInboundMessage(
 
   const { error: msgErr } = await db.from('messages').insert({
     account_id: accountId,
-    contact_id: contactId,
     conversation_id: conversationId,
     sender_type: 'customer',
     content_type: contentType,
