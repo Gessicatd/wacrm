@@ -1,16 +1,23 @@
 // ============================================================
-// POST /api/v1/messages — send a WhatsApp message via the public API.
+// POST /api/v1/messages — send a message via the public API.
 //
-// The headline public endpoint (issue #245). Unlike the dashboard's
-// `/api/whatsapp/send` (which takes an internal `conversation_id`),
-// this takes a phone number — what an external automation actually
-// has — resolves-or-creates the contact + conversation, then runs the
-// same shared send core.
+// The headline public endpoint (issue #245). Supports two resolution
+// modes:
+//
+//  1. By phone:   { "to": "+14155550123", "type": "text", ... }
+//     Resolves-or-creates the contact + conversation by phone (WhatsApp
+//     only), then sends. Works for Meta Cloud API and RyzeAPI depending
+//     on the conversation's provider.
+//
+//  2. By conversation: { "conversation_id": "<uuid>", "type": "text", ... }
+//     Sends directly into an existing conversation. Works for ALL
+//     channels — WhatsApp (Meta / RyzeAPI) and Instagram — because the
+//     shared send core routes on `conversation.channel`.
 //
 // Auth: API key with the `messages:send` scope. Account context (and
 // the service-role client) come from `requireApiKey`.
 //
-// Body:
+// Body (by phone):
 //   {
 //     "to": "+14155550123",                 // required, E.164
 //     "type": "text",                        // text|template|image|video|document|audio (default: text)
@@ -20,10 +27,18 @@
 //     "template": {                          // required when type=template
 //       "name": "order_update",
 //       "language": "en_US",
-//       "params": ["A123"] | { "body": [...] }   // array = positional body; object = structured
+//       "params": ["A123"] | { "body": [...] }
 //     },
-//     "reply_to_message_id": "<uuid>",       // optional, must be in the same conversation
-//     "name": "Jane Doe"                     // optional, names a newly-created contact
+//     "reply_to_message_id": "<uuid>",       // optional
+//     "name": "Jane Doe"                     // optional, for newly-created contact
+//   }
+//
+// Body (by conversation):
+//   {
+//     "conversation_id": "<uuid>",          // existing conversation to send into
+//     "type": "text",
+//     "text": "Hello!",
+//     ...
 //   }
 //
 // Response (201):
@@ -52,12 +67,19 @@ export async function POST(request: Request) {
       return fail('bad_request', 'Request body must be a JSON object', 400);
     }
 
-    const to = typeof body.to === 'string' ? body.to.trim() : '';
-    if (!to) {
-      return fail('bad_request', "'to' is required", 400);
+    const toRaw = typeof body.to === 'string' ? body.to.trim() : ''
+    const conversationIdRaw =
+      typeof body.conversation_id === 'string' ? body.conversation_id.trim() : ''
+
+    if (!toRaw && !conversationIdRaw) {
+      return fail(
+        'bad_request',
+        "'to' or 'conversation_id' is required",
+        400,
+      )
     }
 
-    const type = typeof body.type === 'string' ? body.type : 'text';
+    const type = typeof body.type === 'string' ? body.type : 'text'
 
     // Unpack the optional `template` object into the flat params the
     // send core expects. `params` as an array → legacy positional body
@@ -76,9 +98,8 @@ export async function POST(request: Request) {
         ? template.params
         : undefined;
 
-    // Validate the message shape BEFORE resolveConversationByPhone
-    // finds-or-creates a contact + conversation, so a bad payload 400s
-    // without leaving an orphan contact/conversation behind.
+    // Validate the message shape BEFORE resolving the conversation
+    // so a bad payload 400s without leaving an orphan contact/conversation behind.
     validateSendMessageParams({
       messageType: type,
       contentText: typeof body.text === 'string' ? body.text : null,
@@ -86,21 +107,45 @@ export async function POST(request: Request) {
       templateName: typeof template?.name === 'string' ? template.name : null,
     });
 
-    // Find-or-create the conversation for this phone, then send. Both
-    // steps share `SendMessageError`, so one catch maps the whole
-    // pipeline to the envelope.
-    const resolved = await resolveConversationByPhone(
-      ctx.supabase,
-      ctx.accountId,
-      to,
-      typeof body.name === 'string' ? body.name : null
-    );
+    let conversationId: string
+    let contactId: string
+    let contactCreated = false
+
+    if (conversationIdRaw) {
+      // Mode 2: send into an existing conversation. Validate it
+      // belongs to the authenticated account.
+      const { data: existingConv, error: convErr } = await ctx.supabase
+        .from('conversations')
+        .select('id, contact_id, account_id')
+        .eq('id', conversationIdRaw)
+        .eq('account_id', ctx.accountId)
+        .maybeSingle()
+
+      if (convErr || !existingConv) {
+        return fail('not_found', 'Conversation not found', 404)
+      }
+
+      conversationId = existingConv.id
+      contactId = existingConv.contact_id as string
+    } else {
+      // Mode 1: resolve by phone (WhatsApp). Find-or-create the
+      // contact + conversation, then send.
+      const resolved = await resolveConversationByPhone(
+        ctx.supabase,
+        ctx.accountId,
+        toRaw,
+        typeof body.name === 'string' ? body.name : null,
+      )
+      conversationId = resolved.conversationId
+      contactId = resolved.contactId
+      contactCreated = resolved.contactCreated
+    }
 
     const result = await sendMessageToConversation(
       ctx.supabase,
       ctx.accountId,
       {
-        conversationId: resolved.conversationId,
+        conversationId,
         messageType: type,
         contentText: typeof body.text === 'string' ? body.text : null,
         mediaUrl: typeof body.media_url === 'string' ? body.media_url : null,
@@ -114,19 +159,19 @@ export async function POST(request: Request) {
           typeof body.reply_to_message_id === 'string'
             ? body.reply_to_message_id
             : null,
-      }
-    );
+      },
+    )
 
     return ok(
       {
         message_id: result.messageId,
         whatsapp_message_id: result.whatsappMessageId,
-        conversation_id: resolved.conversationId,
-        contact_id: resolved.contactId,
-        contact_created: resolved.contactCreated,
+        conversation_id: conversationId,
+        contact_id: contactId,
+        contact_created: contactCreated,
       },
-      201
-    );
+      201,
+    )
   } catch (err) {
     if (err instanceof SendMessageError) {
       return fail(err.code, err.message, err.status);
