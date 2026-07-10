@@ -159,6 +159,10 @@ export interface Conversation {
   last_message_at?: string;
   unread_count: number;
   channel?: 'whatsapp' | 'instagram';
+  /** Which WhatsApp provider created this conversation. 'meta' for
+   *  Meta Cloud API, 'ryzeapi' for RyzeAPI gateway. NULL for legacy
+   *  rows and Instagram conversations. */
+  provider?: 'meta' | 'ryzeapi';
   created_at: string;
   updated_at: string;
   contact?: Contact;

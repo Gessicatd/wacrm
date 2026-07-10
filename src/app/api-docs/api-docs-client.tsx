@@ -9,6 +9,7 @@ import {
   statusCodes,
   scopeRows,
   webhookEvents,
+  channelProviderTable,
   authSteps,
   paginationExample,
   successEnvelope,
@@ -270,6 +271,9 @@ export function ApiDocsClient() {
             </div>
             <h3 className="mb-3 text-lg font-semibold text-foreground">{tr.webhooksEventsTitle}</h3>
             <Table headers={[tr.webhooksEventsHeaderEvent, tr.webhooksEventsHeaderFires]} rows={webhookEvents} />
+            <h3 className="mb-3 mt-6 text-lg font-semibold text-foreground">{tr.webhooksChannelFieldsTitle}</h3>
+            <p className="mb-2 text-sm text-muted-foreground">{tr.webhooksChannelFieldsDesc}</p>
+            <Table headers={['Field', 'Values', 'Description']} rows={channelProviderTable} />
             <h3 className="mb-3 mt-6 text-lg font-semibold text-foreground">{tr.webhooksManageTitle}</h3>
             <p className="mb-2 text-sm text-muted-foreground">All under scope webhooks:manage.</p>
             <div className="mb-6 overflow-x-auto rounded-lg border border-border">

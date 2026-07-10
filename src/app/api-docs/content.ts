@@ -54,12 +54,14 @@ const messages: EndpointDoc = {
   path: '/api/v1/messages',
   scopes: ['messages:send'],
   description: {
-    pt: 'Envia uma mensagem WhatsApp para um número de telefone. Você passa um número E.164, não um ID interno — o endpoint encontra-ou-cria o contato + conversa e depois envia.',
-    es: 'Envía un mensaje de WhatsApp a un número de teléfono. Pasa un número E.164, no un ID interno — el endpoint encuentra-o-crea el contacto + conversación y luego envía.',
-    en: 'Send a WhatsApp message to a phone number. You pass an E.164 number, not an internal id — the endpoint finds-or-creates the contact + conversation, then sends.',
+    pt: 'Envia uma mensagem para um contato. WhatsApp (Meta Cloud API ou RyzeAPI) usa número E.164; Instagram usa instagram_id. O endpoint encontra-ou-cria o contato + conversa e roteia automaticamente pelo canal configurado.',
+    es: 'Envía un mensaje a un contacto. WhatsApp (Meta Cloud API o RyzeAPI) usa número E.164; Instagram usa instagram_id. El endpoint encuentra-o-crea el contacto + conversación y enruta automáticamente por el canal configurado.',
+    en: 'Send a message to a contact. WhatsApp (Meta Cloud API or RyzeAPI) uses an E.164 number; Instagram uses instagram_id. The endpoint finds-or-creates the contact + conversation and auto-routes through the configured channel.',
   },
   details: [
     'type is text (default), template, or a media kind (image / video / document / audio). Media needs media_url (and optional filename); text doubles as the caption. template needs a template object.',
+    'For RyzeAPI conversations, templates are sent as plain text with [template:name] prefix since RyzeAPI does not support Meta template format.',
+    'Instagram conversations use instagram_id instead of phone. Private replies to comments are auto-detected from the conversation.',
   ],
   curl: `curl -X POST https://your-crm.example.com/api/v1/messages \\
   -H "Authorization: Bearer wacrm_live_xxx" \\
@@ -165,9 +167,9 @@ const conversationsList: EndpointDoc = {
   path: '/api/v1/conversations',
   scopes: ['conversations:read'],
   description: {
-    pt: 'Lista conversas, da mais recente primeiro. Paginado. Filtros opcionais: ?status= (open / pending / closed) e ?contact_id=. Cada conversa inclui seu contato + tags.',
-    es: 'Lista conversaciones, de la más reciente primero. Paginado. Filtros opcionales: ?status= (open / pending / closed) y ?contact_id=. Cada conversación incluye su contacto + etiquetas.',
-    en: 'List conversations, newest first. Paginated. Optional filters: ?status= (open / pending / closed) and ?contact_id=. Each conversation embeds its contact + tags.',
+    pt: 'Lista conversas, da mais recente primeiro. Paginado. Filtros opcionais: ?status= (open / pending / closed) e ?contact_id=. Cada conversa inclui seu contato + tags, além de channel e provider para identificar o canal de origem.',
+    es: 'Lista conversaciones, de la más reciente primero. Paginado. Filtros opcionales: ?status= (open / pending / closed) y ?contact_id=. Cada conversación incluye su contacto + etiquetas, además de channel y provider para identificar el canal de origen.',
+    en: 'List conversations, newest first. Paginated. Optional filters: ?status= (open / pending / closed) and ?contact_id=. Each conversation embeds its contact + tags, plus channel and provider to identify the source channel.',
   },
   curl: `curl https://your-crm.example.com/api/v1/conversations?status=open&limit=50 \\
   -H "Authorization: Bearer wacrm_live_xxx"`,
@@ -176,6 +178,8 @@ const conversationsList: EndpointDoc = {
     {
       "id": "...",
       "status": "open",
+      "channel": "whatsapp",
+      "provider": "meta",
       "contact": { "id": "...", "phone": "+14155550123", "name": "Jane Doe" },
       "tags": [{ "id": "...", "name": "vip", "color": "#f59e0b" }],
       "last_message_at": "...",
@@ -651,9 +655,14 @@ export const scopeRows: string[][] = [
 ];
 
 export const webhookEvents: string[][] = [
-  ['message.received', 'An inbound message arrives from a contact'],
-  ['message.status_updated', 'A message you sent changed delivery status'],
-  ['conversation.created', 'A new conversation is opened for a contact'],
+  ['message.received', 'An inbound message arrives from a contact. Includes channel + provider fields to identify the source.'],
+  ['message.status_updated', 'A message you sent changed delivery status. Includes channel + provider.'],
+  ['conversation.created', 'A new conversation is opened for a contact. Includes channel + provider.'],
+];
+
+export const channelProviderTable: string[][] = [
+  ['channel', 'whatsapp / instagram', 'The channel the message arrived on'],
+  ['provider', 'meta / ryzeapi', 'For WhatsApp: which backend provider delivered the message. Omitted for Instagram.'],
 ];
 
 export const authSteps: string[][] = [
@@ -673,7 +682,15 @@ export const deliveryPayload = `{
   "event": "message.received",
   "occurred_at": "2026-07-01T12:00:00.000Z",
   "account_id": "...",
-  "data": { "conversation_id": "...", "contact_id": "...", "whatsapp_message_id": "wamid....", "content_type": "text", "text": "Hi 👋" }
+  "data": {
+    "conversation_id": "...",
+    "contact_id": "...",
+    "whatsapp_message_id": "wamid....",
+    "content_type": "text",
+    "text": "Hi 👋",
+    "channel": "whatsapp",
+    "provider": "meta"
+  }
 }`;
 
 export const webhookManageSteps: string[][] = [

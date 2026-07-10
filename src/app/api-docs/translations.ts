@@ -51,6 +51,8 @@ export interface TranslationSet {
   webhooksSemanticsTitle: string;
   webhooksSemanticsBestEffort: string;
   webhooksSemanticsTargetRestrictions: string;
+  webhooksChannelFieldsTitle: string;
+  webhooksChannelFieldsDesc: string;
 
   roadmapTitle: string;
   roadmapDesc: string;
@@ -114,6 +116,8 @@ const t: Record<Lang, TranslationSet> = {
     webhooksSemanticsTitle: 'Semântica de Entrega',
     webhooksSemanticsBestEffort: 'A entrega é best-effort: uma única tentativa por evento com um timeout curto, e redirecionamentos não são seguidos. O message.status_updated cobre mensagens que o wacrm armazena (inbox + API), não apenas envios de broadcast. Devido a reenvios e reordenação dos provedores, o mesmo status pode chegar mais de uma vez ou fora de ordem — deduplique pelo id e não assuma ordenação. Cada falha consecutiva incrementa failure_count; após falhas suficientes, o endpoint é desativado automaticamente (is_active: false) — reative com PATCH.',
     webhooksSemanticsTargetRestrictions: 'Restrições de destino (SSRF). A url deve ser https:// e deve resolver para um endereço público — requisições para localhost, faixas privadas/RFC1918, link-local e alvos internos similares são recusados no momento da entrega.',
+    webhooksChannelFieldsTitle: 'Campos Channel & Provider',
+    webhooksChannelFieldsDesc: 'Todo payload de webhook inclui esses campos em data para que você saiba exatamente qual canal e provedor entregou o evento.',
 
     roadmapTitle: 'Roteiro',
     roadmapDesc: 'A API pública agora cobre mensagens, contatos, conversas, broadcasts, pipelines, deals e webhooks de saída — o escopo completo. Ideias futuras (templates, flows, uma fila de entrega para webhooks) ainda não estão agendadas.',
@@ -176,6 +180,8 @@ const t: Record<Lang, TranslationSet> = {
     webhooksSemanticsTitle: 'Semántica de Entrega',
     webhooksSemanticsBestEffort: 'La entrega es best-effort: un solo intento por evento con un timeout corto, y no se siguen redirecciones. message.status_updated cubre mensajes que wacrm almacena (inbox + API), no solo envíos de broadcast. Debido a reenvíos y reordenación, el mismo estado puede llegar más de una vez o fuera de orden — deduplique por id y no asuma orden. Cada fallo consecutivo incrementa failure_count; tras suficientes fallos, el endpoint se desactiva automáticamente (is_active: false) — reactive con PATCH.',
     webhooksSemanticsTargetRestrictions: 'Restricciones de destino (SSRF). La url debe ser https:// y debe resolver a una dirección pública — solicitudes a localhost, rangos privados/RFC1918, link-local y destinos internos similares son rechazados.',
+    webhooksChannelFieldsTitle: 'Campos Channel & Provider',
+    webhooksChannelFieldsDesc: 'Cada payload de webhook incluye estos campos en data para que sepa exactamente qué canal y proveedor entregó el evento.',
 
     roadmapTitle: 'Hoja de Ruta',
     roadmapDesc: 'La API pública ahora cubre mensajes, contactos, conversaciones, broadcasts, pipelines, deals y webhooks de salida — el alcance completo. Ideas futuras (templates, flows, una cola de entrega para webhooks) aún no están programadas.',
@@ -238,6 +244,8 @@ const t: Record<Lang, TranslationSet> = {
     webhooksSemanticsTitle: 'Delivery Semantics',
     webhooksSemanticsBestEffort: 'Delivery is best-effort: a single attempt per event with a short timeout, and redirects are not followed. message.status_updated covers messages wacrm stores (inbox + API sends), not broadcast-only sends. Because providers re-send and re-order status callbacks, the same status may arrive more than once or out of order; dedupe on id and don\'t assume ordering. Each consecutive failure increments failure_count; after enough consecutive failures the endpoint is auto-disabled (is_active: false) — re-enable it with PATCH.',
     webhooksSemanticsTargetRestrictions: 'Target restrictions (SSRF). The url must be https:// and must resolve to a public address — requests to localhost, private/RFC1918 ranges, link-local, and similar internal targets are refused at delivery time.',
+    webhooksChannelFieldsTitle: 'Channel & Provider fields',
+    webhooksChannelFieldsDesc: 'Every webhook payload includes these fields in data so you know exactly which channel and provider delivered the event.',
 
     roadmapTitle: 'Roadmap',
     roadmapDesc: 'The public API now covers messaging, contacts, conversations, broadcasts, pipelines, deals, and outbound webhooks — the full scope. Future ideas (templates, flows, a delivery queue for webhooks) are not yet scheduled.',

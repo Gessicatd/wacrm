@@ -414,13 +414,13 @@ async function handleStatusUpdate(status: {
   //    the owning account for delivery.
   const { data: msgRow } = await supabaseAdmin()
     .from('messages')
-    .select('conversation_id, conversations(account_id)')
+    .select('conversation_id, conversations(account_id, channel, provider)')
     .eq('message_id', status.id)
     .limit(1)
     .maybeSingle()
 
   if (msgRow) {
-    const conv = msgRow.conversations as { account_id: string } | null
+    const conv = msgRow.conversations as { account_id: string; channel?: string; provider?: string } | null
     const accountId = conv?.account_id
     if (accountId) {
       await dispatchWebhookEvent(
@@ -431,6 +431,8 @@ async function handleStatusUpdate(status: {
           whatsapp_message_id: status.id,
           conversation_id: msgRow.conversation_id,
           status: status.status,
+          channel: conv?.channel ?? 'whatsapp',
+          provider: conv?.provider ?? 'meta',
         }
       )
     }
@@ -600,6 +602,8 @@ async function processMessage(
     await dispatchWebhookEvent(supabaseAdmin(), accountId, 'conversation.created', {
       conversation_id: conversation.id,
       contact_id: contactRecord.id,
+      channel: 'whatsapp',
+      provider: 'meta',
     })
   }
 
@@ -815,6 +819,8 @@ async function processMessage(
     whatsapp_message_id: message.id,
     content_type: contentType,
     text: contentText,
+    channel: 'whatsapp',
+    provider: 'meta',
   })
 }
 

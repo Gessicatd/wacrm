@@ -336,6 +336,8 @@ async function processInboundMessage(
       type: messageType,
       text: text ? { body: text } : undefined,
       timestamp: String(Math.floor(timestamp.getTime() / 1000)),
+      channel: 'whatsapp',
+      provider: 'ryzeapi',
     },
   ).catch((err) => console.error('[webhook] dispatch failed:', err))
 }

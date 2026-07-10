@@ -424,9 +424,17 @@ interface ConversationItemProps {
 }
 
 const CHANNEL_BADGE: Record<string, { label: string; className: string }> = {
-  whatsapp: { label: 'WA', className: 'bg-green-500/10 text-green-400 border-green-500/40' },
+  whatsapp_meta: { label: 'WA', className: 'bg-green-500/10 text-green-400 border-green-500/40' },
+  whatsapp_ryzeapi: { label: 'RZ', className: 'bg-blue-500/10 text-blue-400 border-blue-500/40' },
   instagram: { label: 'IG', className: 'bg-purple-500/10 text-purple-400 border-purple-500/40' },
 };
+
+function badgeKey(channel: string, provider?: string | null): string {
+  if (channel === 'instagram') return 'instagram'
+  if (channel === 'whatsapp' && provider === 'ryzeapi') return 'whatsapp_ryzeapi'
+  if (channel === 'whatsapp') return 'whatsapp_meta'
+  return 'whatsapp_meta'
+}
 
 function ConversationItem({
   conversation,
@@ -435,6 +443,7 @@ function ConversationItem({
 }: ConversationItemProps) {
   const contact = conversation.contact;
   const channel = conversation.channel || 'whatsapp';
+  const provider = conversation.provider;
   const displayName = contact?.name || contact?.phone || contact?.instagram_username || contact?.instagram_id || "Unknown";
   const initials = displayName.charAt(0).toUpperCase();
 
@@ -476,8 +485,9 @@ function ConversationItem({
             {displayName}
           </span>
           <div className="flex shrink-0 items-center gap-1.5">
-            {channel !== 'whatsapp' && (() => {
-              const badge = CHANNEL_BADGE[channel];
+            {(() => {
+              const key = badgeKey(channel, provider);
+              const badge = CHANNEL_BADGE[key];
               return badge ? (
                 <span className={`inline-flex items-center rounded border px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${badge.className}`}>
                   {badge.label}
