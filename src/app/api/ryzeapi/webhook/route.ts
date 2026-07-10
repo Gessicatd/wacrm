@@ -47,12 +47,14 @@ export async function POST(request: Request) {
 
   const event = String(payload.event ?? 'message.exchange')
 
-  // Instance name — try payload fields first, then URL query param.
+  // Instance name — try instanceData first (new RyzeAPI format), then
+  // legacy payload fields, then URL query param.
+  const instData = (payload.instanceData as Record<string, unknown> | null) ?? {}
   let instanceName = String(
-    payload.instance
+    instData.instance
+    ?? payload.instance
     ?? payload.instanceName
     ?? payload.instance_name
-    ?? (payload.data as Record<string, unknown> | null)?.instance
     ?? ''
   )
 
@@ -62,11 +64,7 @@ export async function POST(request: Request) {
     instanceName = url.searchParams.get('instance') ?? ''
   }
 
-  console.log('[ryzeapi webhook] received event:', event, 'instance:', instanceName || '(empty)', 'msgId:', payload.id ?? payload.messageId)
-  console.log('[ryzeapi webhook] payload keys:', Object.keys(payload).join(', '))
-  if (payload.data && typeof payload.data === 'object') {
-    console.log('[ryzeapi webhook] data keys:', Object.keys(payload.data as Record<string, unknown>).join(', '))
-  }
+  console.log('[ryzeapi webhook] event:', event, 'instance:', instanceName || '(empty)')
 
   if (event === 'instance.state') {
     void handleInstanceState(db, instanceName, payload)
@@ -85,117 +83,188 @@ export async function POST(request: Request) {
   // ---- Extract message data -------------------------------------------
   const rawData = (payload.data as Record<string, unknown> | null) ?? {}
 
-  // Handle messages.upsert format where data.messages is an array.
-  let data: Record<string, unknown>
-  let key: Record<string, unknown>
-  let messageObj: Record<string, unknown> | null
+  // Detect format: new RyzeAPI format has data.chat.jid + data.message.type
+  // Legacy Baileys format has data.key.remoteJid + data.message.conversation
+  const isNewFormat = !!(rawData.chat || rawData.sender)
 
-  if (Array.isArray(rawData.messages) && rawData.messages.length > 0) {
-    const firstMsg = rawData.messages[0] as Record<string, unknown> | undefined
-    if (!firstMsg) {
+  let fromRaw: string
+  let messageId: string
+  let messageType: string
+  let contentText: string | null = null
+  let interactiveReplyId: string | null = null
+  let interactiveReplyTitle: string | null = null
+  let pushName: string | null = null
+  let timestamp: Date
+
+  if (isNewFormat) {
+    // ---- New RyzeAPI format --------------------------------------------
+    const chat = (rawData.chat as Record<string, unknown> | null) ?? {}
+    const sender = (rawData.sender as Record<string, unknown> | null) ?? {}
+    const msg = (rawData.message as Record<string, unknown> | null) ?? {}
+
+    // Skip outgoing messages.
+    const direction = String(rawData.direction ?? '')
+    if (direction === 'outgoing') {
       return NextResponse.json({ status: 'ok' })
     }
-    data = firstMsg
-    key = (firstMsg.key as Record<string, unknown>) ?? {}
-    messageObj = (firstMsg.message as Record<string, unknown>) ?? null
+
+    // Sender JID.
+    fromRaw = String(sender.jid ?? chat.jid ?? '')
+    if (!fromRaw) {
+      return NextResponse.json({ status: 'ok' })
+    }
+
+    // Skip groups.
+    if (fromRaw.includes('@g.us')) {
+      return NextResponse.json({ status: 'ok' })
+    }
+
+    // Message ID.
+    messageId = String(rawData.id ?? `ryze_${Date.now()}`)
+
+    // Message type and content.
+    messageType = String(msg.type ?? 'text')
+
+    switch (messageType) {
+      case 'text':
+        contentText = String(msg.content ?? '')
+        break
+      case 'image':
+      case 'video':
+      case 'audio':
+      case 'document':
+      case 'sticker': {
+        const media = msg.media as Record<string, unknown> | null
+        contentText = media?.caption ? String(media.caption) : null
+        break
+      }
+      case 'location': {
+        const loc = msg.location as Record<string, unknown> | null
+        if (loc) {
+          contentText = [loc.name, loc.address, `${loc.latitude},${loc.longitude}`]
+            .filter(Boolean)
+            .join(' - ')
+        }
+        break
+      }
+      case 'reaction': {
+        const react = msg.reaction as Record<string, unknown> | null
+        contentText = react?.text ? String(react.text) : null
+        break
+      }
+      case 'interactive': {
+        const inter = msg.interactive as Record<string, unknown> | null
+        if (inter) {
+          interactiveReplyId = inter.buttonId ? String(inter.buttonId) : inter.listId ? String(inter.listId) : null
+          interactiveReplyTitle = inter.title ? String(inter.title) : inter.description ? String(inter.description) : null
+          contentText = interactiveReplyTitle
+        }
+        break
+      }
+      default:
+        contentText = String(msg.content ?? null)
+    }
+
+    // Sender name from sender > chat > fallback.
+    pushName = String(sender.name ?? chat.name ?? '')
+
+    // Timestamp — ISO 8601 string from RyzeAPI.
+    const tsRaw = rawData.timestamp
+    timestamp = tsRaw ? new Date(String(tsRaw)) : new Date()
   } else {
-    data = rawData
-    key = (data.key as Record<string, unknown>) ?? {}
-    messageObj = (data.message as Record<string, unknown>) ?? null
+    // ---- Legacy Baileys format (fallback) ------------------------------
+    // Handle messages.upsert where data.messages is an array.
+    let data: Record<string, unknown>
+    let key: Record<string, unknown>
+    let messageObj: Record<string, unknown> | null
+
+    if (Array.isArray(rawData.messages) && rawData.messages.length > 0) {
+      const firstMsg = rawData.messages[0] as Record<string, unknown> | undefined
+      if (!firstMsg) {
+        return NextResponse.json({ status: 'ok' })
+      }
+      data = firstMsg
+      key = (firstMsg.key as Record<string, unknown>) ?? {}
+      messageObj = (firstMsg.message as Record<string, unknown>) ?? null
+    } else {
+      data = rawData
+      key = (data.key as Record<string, unknown>) ?? {}
+      messageObj = (data.message as Record<string, unknown>) ?? null
+    }
+
+    fromRaw = String(payload.from ?? payload.remoteJid ?? key.remoteJid ?? '')
+    if (!fromRaw) {
+      return NextResponse.json({ status: 'ok' })
+    }
+
+    if (fromRaw.includes('@g.us') || fromRaw.includes('@broadcast') || fromRaw.includes('status')) {
+      return NextResponse.json({ status: 'ok' })
+    }
+
+    if (key.fromMe) {
+      return NextResponse.json({ status: 'ok' })
+    }
+
+    messageId = String(
+      payload.id ?? payload.messageId ?? key.id ?? `ryze_${Date.now()}`,
+    )
+
+    const msgData = messageObj ?? (payload.message as Record<string, unknown> | null) ?? {}
+    messageType = String(data.messageType ?? payload.messageType ?? payload.type ?? 'text')
+
+    if (typeof msgData.conversation === 'string') {
+      messageType = 'text'
+      contentText = msgData.conversation
+    } else if (msgData.extendedTextMessage && typeof msgData.extendedTextMessage === 'object') {
+      messageType = 'text'
+      const etm = msgData.extendedTextMessage as Record<string, unknown>
+      contentText = String(etm.text ?? '')
+    } else if (msgData.imageMessage) {
+      messageType = 'image'
+      const im = msgData.imageMessage as Record<string, unknown>
+      contentText = im.caption ? String(im.caption) : null
+    } else if (msgData.videoMessage) {
+      messageType = 'video'
+      const vm = msgData.videoMessage as Record<string, unknown>
+      contentText = vm.caption ? String(vm.caption) : null
+    } else if (msgData.audioMessage || msgData.ptvMessage) {
+      messageType = 'audio'
+    } else if (msgData.documentMessage) {
+      messageType = 'document'
+      const dm = msgData.documentMessage as Record<string, unknown>
+      contentText = dm.caption ? String(dm.caption) : null
+    } else if (msgData.stickerMessage) {
+      messageType = 'sticker'
+    } else if (msgData.locationMessage) {
+      messageType = 'location'
+    } else if (msgData.buttonsResponseMessage) {
+      messageType = 'interactive'
+      const bm = msgData.buttonsResponseMessage as Record<string, unknown>
+      contentText = String(bm.selectedDisplayText ?? '')
+    } else if (msgData.listResponseMessage) {
+      messageType = 'interactive'
+      const lm = msgData.listResponseMessage as Record<string, unknown>
+      const reply = (lm.singleSelectReply as Record<string, unknown> | null) ?? {}
+      contentText = String(reply.selectedRowId ?? '')
+    } else if (typeof payload.content === 'string') {
+      contentText = payload.content
+    } else if (typeof payload.body === 'string') {
+      contentText = payload.body
+    }
+
+    const rawTs = payload.timestamp ?? data.messageTimestamp
+    timestamp = rawTs ? new Date(Number(rawTs) * 1000) : new Date()
+    pushName = String(payload.pushName ?? data.pushName ?? '')
   }
 
-  // Sender phone — try multiple shapes.
-  const fromRaw =
-    String(payload.from ?? payload.remoteJid ?? key.remoteJid ?? '')
-
-  if (!fromRaw) {
-    return NextResponse.json({ status: 'ok' })
-  }
-
-  // Strip @s.whatsapp.net, @g.us suffixes.
+  // Strip @s.whatsapp.net suffix for phone number.
   const fromPhone = fromRaw.replace(/@.*$/, '')
-
-  // Skip groups, broadcasts, status.
-  if (fromRaw.includes('@g.us') || fromRaw.includes('@broadcast') || fromRaw.includes('status')) {
-    return NextResponse.json({ status: 'ok' })
-  }
-  // Skip messages from self.
-  if (key.fromMe) {
-    return NextResponse.json({ status: 'ok' })
-  }
 
   // Validate phone.
   const normalizedPhone = normalizePhone(fromPhone)
   if (!isValidE164(normalizedPhone)) {
     return NextResponse.json({ status: 'ok' })
   }
-
-  // Message ID.
-  const messageId = String(
-    payload.id ?? payload.messageId ?? key.id ?? `ryze_${Date.now()}`,
-  )
-
-  // Determine type and content from the nested message object.
-  const msgData = messageObj ?? (payload.message as Record<string, unknown> | null) ?? {}
-  let messageType = String(data.messageType ?? payload.messageType ?? payload.type ?? 'text')
-  let contentText: string | null = null
-  let interactiveReplyId: string | null = null
-  let interactiveReplyTitle: string | null = null
-
-  if (typeof msgData.conversation === 'string') {
-    messageType = 'text'
-    contentText = msgData.conversation
-  } else if (msgData.extendedTextMessage && typeof msgData.extendedTextMessage === 'object') {
-    messageType = 'text'
-    const etm = msgData.extendedTextMessage as Record<string, unknown>
-    contentText = String(etm.text ?? '')
-  } else if (msgData.imageMessage) {
-    messageType = 'image'
-    const im = msgData.imageMessage as Record<string, unknown>
-    contentText = im.caption ? String(im.caption) : null
-  } else if (msgData.videoMessage) {
-    messageType = 'video'
-    const vm = msgData.videoMessage as Record<string, unknown>
-    contentText = vm.caption ? String(vm.caption) : null
-  } else if (msgData.audioMessage || msgData.ptvMessage) {
-    messageType = 'audio'
-  } else if (msgData.documentMessage) {
-    messageType = 'document'
-    const dm = msgData.documentMessage as Record<string, unknown>
-    contentText = dm.caption ? String(dm.caption) : null
-  } else if (msgData.stickerMessage) {
-    messageType = 'sticker'
-  } else if (msgData.locationMessage) {
-    messageType = 'location'
-  } else if (msgData.buttonsResponseMessage) {
-    messageType = 'interactive'
-    const bm = msgData.buttonsResponseMessage as Record<string, unknown>
-    interactiveReplyId = String(bm.selectedButtonId ?? '')
-    interactiveReplyTitle = String(bm.selectedDisplayText ?? '')
-    contentText = interactiveReplyTitle
-  } else if (msgData.listResponseMessage) {
-    messageType = 'interactive'
-    const lm = msgData.listResponseMessage as Record<string, unknown>
-    const reply = (lm.singleSelectReply as Record<string, unknown> | null) ?? {}
-    interactiveReplyId = String(reply.selectedRowId ?? '')
-    interactiveReplyTitle = String(lm.title ?? '')
-    contentText = interactiveReplyTitle
-  } else if (msgData.reactionMessage) {
-    messageType = 'reaction'
-    const rm = msgData.reactionMessage as Record<string, unknown>
-    contentText = String(rm.text ?? '')
-  } else if (typeof payload.content === 'string') {
-    contentText = payload.content
-  } else if (typeof payload.body === 'string') {
-    contentText = payload.body
-  }
-
-  // Timestamp.
-  const rawTs = payload.timestamp ?? data.messageTimestamp
-  const ts = rawTs ? new Date(Number(rawTs) * 1000) : new Date()
-
-  // Push name / contact name.
-  const pushName = String(payload.pushName ?? data.pushName ?? '')
 
   // ---- Find config ----------------------------------------------------
 
@@ -236,7 +305,7 @@ export async function POST(request: Request) {
         contentText,
         interactiveReplyId,
         interactiveReplyTitle,
-        timestamp: ts,
+        timestamp,
       })
     } catch (err) {
       console.error('[ryzeapi webhook] processInboundMessage error:', err)
