@@ -349,7 +349,7 @@ async function processInboundMessage(
   } = args
 
   // 1. Find or create contact.
-  const contactId = await upsertContact(db, accountId, fromPhone, pushName)
+  const contactId = await upsertContact(db, accountId, configOwnerUserId, fromPhone, pushName)
 
   // 2. Find or create conversation.
   const conversationId = await upsertConversation(
@@ -457,6 +457,7 @@ async function processInboundMessage(
 async function upsertContact(
   db: ReturnType<typeof supabaseAdmin>,
   accountId: string,
+  userId: string,
   phone: string,
   pushName: string | null,
 ): Promise<string> {
@@ -467,6 +468,7 @@ async function upsertContact(
     .from('contacts')
     .insert({
       account_id: accountId,
+      user_id: userId || null,
       phone,
       name: pushName || phone,
       created_at: new Date().toISOString(),
