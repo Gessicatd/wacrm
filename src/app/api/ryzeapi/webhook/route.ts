@@ -468,8 +468,7 @@ async function upsertContact(
     .insert({
       account_id: accountId,
       phone,
-      first_name: pushName?.split(' ')[0] ?? phone,
-      last_name: pushName?.split(' ').slice(1).join(' ') || null,
+      name: pushName || phone,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
