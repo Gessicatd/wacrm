@@ -353,7 +353,7 @@ async function processInboundMessage(
 
   // 2. Find or create conversation.
   const conversationId = await upsertConversation(
-    db, accountId, contactId, fromPhone,
+    db, accountId, configOwnerUserId, contactId,
   )
 
   // 3. Insert message.
@@ -368,7 +368,7 @@ async function processInboundMessage(
     content_type: contentType,
     content_text: text,
     message_id: messageId,
-    status: 'received',
+    status: 'delivered',
     created_at: timestamp.toISOString(),
   })
 
@@ -491,8 +491,8 @@ async function upsertContact(
 async function upsertConversation(
   db: ReturnType<typeof supabaseAdmin>,
   accountId: string,
+  userId: string,
   contactId: string,
-  phone: string,
 ): Promise<string> {
   const { data: existing } = await db
     .from('conversations')
@@ -510,11 +510,11 @@ async function upsertConversation(
     .from('conversations')
     .insert({
       account_id: accountId,
+      user_id: userId || null,
       contact_id: contactId,
       channel: 'whatsapp',
       provider: 'ryzeapi',
       status: 'open',
-      subject: phone,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -531,14 +531,13 @@ function mapContentType(type: string): string {
     case 'video':
     case 'audio':
     case 'document':
-    case 'sticker':
       return type
+    case 'sticker':
+      return 'image'
     case 'location':
       return 'location'
     case 'interactive':
       return 'interactive'
-    case 'reaction':
-      return 'reaction'
     default:
       return 'text'
   }
