@@ -614,25 +614,40 @@ const instagramMessages: EndpointDoc = {
   path: '/api/v1/instagram/messages',
   scopes: ['messages:send'],
   description: {
-    pt: 'Registra uma mensagem recebida do Instagram no CRM. Chamado pelo n8n quando uma DM do Instagram chega. Cria contato + conversa (canal instagram) se necessário. Diferente de POST /api/v1/messages, este endpoint não envia mensagens — apenas persiste.',
-    es: 'Registra un mensaje recibido de Instagram en el CRM. Llamado por n8n cuando llega un DM de Instagram. Crea contacto + conversación (canal instagram) si es necesario. Diferente de POST /api/v1/messages, este endpoint no envía mensajes — solo persiste.',
-    en: 'Log an inbound Instagram DM to the CRM. Called by n8n when an Instagram DM arrives. Creates contact + conversation (instagram channel) as needed. Unlike POST /api/v1/messages, this endpoint does not send — it only persists.',
+    pt: 'Registra e envia mensagens bidirecionais do Instagram. Chamado pelo n8n: quando uma DM do Instagram chega (sender_type: customer) apenas persiste; quando é uma resposta (sender_type: agent | bot) envia via Instagram Graph API e persiste. Cria contato + conversa automaticamente se necessário.',
+    es: 'Registra y envía mensajes bidireccionales de Instagram. Llamado por n8n: cuando un DM de Instagram llega (sender_type: customer) solo persiste; cuando es una respuesta (sender_type: agent | bot) envía a través de Instagram Graph API y persiste. Crea contacto + conversación automáticamente si es necesario.',
+    en: 'Log and send bidirectional Instagram messages. Called by n8n: when an Instagram DM arrives (sender_type: customer) it only persists; when it is a reply (sender_type: agent | bot) it sends via the Instagram Graph API and persists. Creates contact + conversation automatically if needed.',
   },
   details: [
+    'sender_type determines message direction: customer (default, inbound — only persists), agent (outbound by a human — sends + persists), bot (outbound automated — sends + persists).',
     'content_type must be one of: text, image, video, audio, document.',
     'instagram_id is required — the Instagram user/scoped-id from the sender.',
     'instagram_username and name are optional but help identify the contact.',
     'instagram_message_id is optional; pass it for dedup if Meta provides one.',
+    'When sender_type is agent or bot, text or media_url is required for the outbound send.',
     'timestamp is optional ISO-8601; defaults to now.',
   ],
-  curl: `curl -X POST https://your-crm.example.com/api/v1/instagram/messages \\
+  curl: `# Inbound (customer DM)
+curl -X POST https://your-crm.example.com/api/v1/instagram/messages \\
   -H "Authorization: Bearer wacrm_live_xxx" \\
   -H "Content-Type: application/json" \\
   -d '{
         "instagram_id": "805905602035495",
         "instagram_username": "teste_teste",
+        "sender_type": "customer",
         "content_type": "text",
         "text": "Ola, gostaria de saber mais sobre os produtos"
+      }'
+
+# Outbound (agent reply)
+curl -X POST https://your-crm.example.com/api/v1/instagram/messages \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+        "instagram_id": "805905602035495",
+        "sender_type": "agent",
+        "content_type": "text",
+        "text": "Ola! Claro, vou te ajudar com os produtos."
       }'`,
   json: `{
   "data": {
