@@ -228,6 +228,11 @@ export function MessageThread({
       return { expired: false, remaining: "" };
     }
 
+    // RyzeAPI uses QR-code pairing (WhatsApp Web-style) — no 24-hour session limit
+    if (conversation?.provider === "ryzeapi") {
+      return { expired: false, remaining: "" };
+    }
+
     // Find last customer message
     const lastCustomerMsg = [...messages]
       .reverse()
