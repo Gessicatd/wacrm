@@ -742,6 +742,108 @@ const transferOwnership: EndpointDoc = {
   notes: ['This is an irreversible, audited action. Rate-limited to prevent abuse.'],
 };
 
+const mediaLibraryList: EndpointDoc = {
+  method: 'GET',
+  path: '/api/v1/media-library',
+  scopes: ['media:read'],
+  description: {
+    pt: 'Lista os assets da biblioteca de mídia, do mais recente primeiro. Paginado. Filtros opcionais: ?search= (nome), ?tag=<tagId>, ?type= (image / video / document). Cada asset inclui suas tags. Use com POST /api/v1/messages para enviar mídia da biblioteca para um contato via n8n ou automação.',
+    es: 'Lista los assets de la biblioteca de medios, del más reciente primero. Paginado. Filtros opcionales: ?search= (nombre), ?tag=<tagId>, ?type= (image / video / document). Cada asset incluye sus etiquetas. Úselo con POST /api/v1/messages para enviar medios de la biblioteca a un contacto vía n8n o automatización.',
+    en: 'List media library assets, newest first. Paginated. Optional filters: ?search= (name), ?tag=<tagId>, ?type= (image / video / document). Each asset embeds its tags. Use with POST /api/v1/messages to send library media to a contact via n8n or automation.',
+  },
+  curl: `curl "https://your-crm.example.com/api/v1/media-library?tag=<tagId>&type=image&limit=50" \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+  json: `{
+  "data": [
+    {
+      "id": "...",
+      "name": "Depoimento João - Antes e Depois",
+      "caption": "Olha o resultado que o João teve!",
+      "media_type": "image",
+      "media_url": "https://...supabase.co/.../media-library/account-.../...-depoimento.png",
+      "file_size": 245760,
+      "tags": [
+        { "id": "...", "name": "depoimento", "color": "#10b981" },
+        { "id": "...", "name": "resultado", "color": "#f59e0b" }
+      ],
+      "created_at": "..."
+    }
+  ],
+  "meta": { "next_cursor": "..." }
+}`,
+  details: [
+    'Use the returned media_url directly in POST /api/v1/messages as the media_url field.',
+    'The caption field is the pre-saved text that can be passed as content_text when sending.',
+  ],
+};
+
+const mediaLibraryDetail: EndpointDoc = {
+  method: 'GET',
+  path: '/api/v1/media-library/{id}',
+  scopes: ['media:read'],
+  description: {
+    pt: 'Ler um asset específico da biblioteca de mídia. 404 se pertencer a outra conta.',
+    es: 'Leer un asset específico de la biblioteca de medios. 404 si pertenece a otra cuenta.',
+    en: 'Read a specific media library asset. 404 if it belongs to another account.',
+  },
+  curl: `curl https://your-crm.example.com/api/v1/media-library/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+};
+
+const mediaLibraryTagsList: EndpointDoc = {
+  method: 'GET',
+  path: '/api/v1/media-library/tags',
+  scopes: ['media:read'],
+  description: {
+    pt: 'Lista todas as tags da biblioteca de mídia da conta, ordenadas por nome. Use os IDs retornados no filtro ?tag= do endpoint de listagem de assets.',
+    es: 'Lista todas las etiquetas de la biblioteca de medios de la cuenta, ordenadas por nombre. Use los IDs devueltos en el filtro ?tag= del endpoint de listado de assets.',
+    en: "List all media library tags for the account, ordered by name. Use the returned IDs in the ?tag= filter on the assets list endpoint.",
+  },
+  curl: `curl https://your-crm.example.com/api/v1/media-library/tags \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+  json: `{
+  "data": [
+    { "id": "...", "name": "depoimento", "color": "#10b981" },
+    { "id": "...", "name": "resultado", "color": "#f59e0b" },
+    { "id": "...", "name": "produto", "color": "#3b82f6" }
+  ]
+}`,
+};
+
+const mediaLibraryTagsCreate: EndpointDoc = {
+  method: 'POST',
+  path: '/api/v1/media-library/tags',
+  scopes: ['media:write'],
+  description: {
+    pt: 'Cria uma nova tag para organizar assets da biblioteca de mídia. name é obrigatório e deve ser único na conta. color é opcional (hex, ex: "#10b981").',
+    es: 'Crea una nueva etiqueta para organizar assets de la biblioteca de medios. name es obligatorio y debe ser único en la cuenta. color es opcional (hex, ej: "#10b981").',
+    en: 'Create a new tag for organizing media library assets. name is required and must be unique per account. color is optional (hex, e.g. "#10b981").',
+  },
+  curl: `curl -X POST https://your-crm.example.com/api/v1/media-library/tags \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "name": "depoimento", "color": "#10b981" }'`,
+  json: `{
+  "data": { "id": "...", "name": "depoimento", "color": "#10b981" }
+}`,
+};
+
+const mediaLibraryTagsDelete: EndpointDoc = {
+  method: 'DELETE',
+  path: '/api/v1/media-library/tags/{id}',
+  scopes: ['media:write'],
+  description: {
+    pt: 'Remove uma tag da biblioteca de mídia. As associações com assets são removidas automaticamente (ON DELETE CASCADE).',
+    es: 'Elimina una etiqueta de la biblioteca de medios. Las asociaciones con assets se eliminan automáticamente (ON DELETE CASCADE).',
+    en: 'Delete a media library tag. Asset associations are removed automatically (ON DELETE CASCADE).',
+  },
+  curl: `curl -X DELETE https://your-crm.example.com/api/v1/media-library/tags/{id} \\
+  -H "Authorization: Bearer wacrm_live_xxx"`,
+  json: `{
+  "data": { "deleted": true }
+}`,
+};
+
 export const endpoints: EndpointDoc[] = [
   me,
   messages,
@@ -770,6 +872,11 @@ export const endpoints: EndpointDoc[] = [
   membersList,
   membersDetail,
   transferOwnership,
+  mediaLibraryList,
+  mediaLibraryDetail,
+  mediaLibraryTagsList,
+  mediaLibraryTagsCreate,
+  mediaLibraryTagsDelete,
 ];
 
 export const statusCodes: string[][] = [
@@ -795,6 +902,8 @@ export const scopeRows: string[][] = [
   ['deals:read', 'List and read deals'],
   ['deals:write', 'Create, update, delete deals, move, change status'],
   ['members:read', 'List and read team members and their roles'],
+  ['media:read', 'List and read media library assets and tags'],
+  ['media:write', 'Upload and delete media library assets, create and delete tags'],
 ];
 
 export const webhookEvents: string[][] = [
