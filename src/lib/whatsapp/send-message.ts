@@ -25,11 +25,18 @@ import {
   sendTextMessage,
   sendTemplateMessage,
   sendMediaMessage,
+  sendInteractiveButtons,
+  sendInteractiveList,
   type MediaKind,
+  type InteractiveButton,
+  type InteractiveListSection,
 } from '@/lib/whatsapp/meta-api';
 import {
   sendText as sendRyzeText,
   sendMedia as sendRyzeMedia,
+  sendButtons as sendRyzeButtons,
+  sendList as sendRyzeList,
+  sendPix as sendRyzePix,
 } from '@/lib/ryzeapi/client';
 import {
   sendTextMessage as sendInstagramText,
@@ -49,10 +56,13 @@ import type { MessageTemplate } from '@/types';
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
+export const INTERACTIVE_KINDS = ['buttons', 'list'] as const;
 export const VALID_MESSAGE_TYPES = [
   'text',
   'template',
   ...MEDIA_KINDS,
+  ...INTERACTIVE_KINDS,
+  'pix',
 ] as const;
 
 /**
@@ -84,6 +94,18 @@ export interface SendMessageParams {
   /** Structured template params (header/body/buttons). */
   templateMessageParams?: unknown;
   replyToMessageId?: string | null;
+  // Interactive buttons
+  buttons?: { id: string; title: string }[] | null;
+  headerText?: string | null;
+  footerText?: string | null;
+  // Interactive list
+  buttonLabel?: string | null;
+  sections?: { title?: string; rows: { id: string; title: string; description?: string }[] }[] | null;
+  // PIX (RyzeAPI only)
+  pixKey?: string | null;
+  pixKeyType?: string | null;
+  merchantName?: string | null;
+  pixItems?: { name: string; description?: string; quantity: number; unitPrice: number }[] | null;
 }
 
 export interface SendMessageResult {
@@ -113,8 +135,14 @@ export function validateSendMessageParams(params: {
   contentText?: string | null;
   mediaUrl?: string | null;
   templateName?: string | null;
+  buttons?: { id: string; title: string }[] | null;
+  buttonLabel?: string | null;
+  sections?: { title?: string; rows: { id: string; title: string; description?: string }[] }[] | null;
+  pixKey?: string | null;
+  pixKeyType?: string | null;
+  merchantName?: string | null;
 }): void {
-  const { messageType, contentText, mediaUrl, templateName } = params;
+  const { messageType, contentText, mediaUrl, templateName, buttons, buttonLabel, sections, pixKey, pixKeyType, merchantName } = params;
 
   if (!messageType) {
     throw new SendMessageError('bad_request', 'message_type is required', 400);
@@ -144,6 +172,48 @@ export function validateSendMessageParams(params: {
       'template_name is required for template messages',
       400
     );
+  }
+
+  if (messageType === 'buttons') {
+    if (!buttons || !Array.isArray(buttons) || buttons.length === 0 || buttons.length > 3) {
+      throw new SendMessageError('bad_request', 'buttons requires a "buttons" array with 1-3 items, each with "id" and "title"', 400);
+    }
+    for (const btn of buttons) {
+      if (!btn.id || !btn.title) {
+        throw new SendMessageError('bad_request', 'Each button must have "id" and "title"', 400);
+      }
+    }
+    if (!contentText) {
+      throw new SendMessageError('bad_request', 'content_text (body) is required for buttons', 400);
+    }
+  }
+
+  if (messageType === 'list') {
+    if (!sections || !Array.isArray(sections) || sections.length === 0) {
+      throw new SendMessageError('bad_request', 'list requires a "sections" array with at least 1 section', 400);
+    }
+    const totalRows = sections.reduce((sum, s) => sum + (s.rows?.length ?? 0), 0);
+    if (totalRows === 0 || totalRows > 10) {
+      throw new SendMessageError('bad_request', 'list requires 1-10 rows total across all sections', 400);
+    }
+    if (!buttonLabel) {
+      throw new SendMessageError('bad_request', 'list requires "button_label"', 400);
+    }
+    if (!contentText) {
+      throw new SendMessageError('bad_request', 'content_text (body) is required for list', 400);
+    }
+  }
+
+  if (messageType === 'pix') {
+    if (!pixKey) {
+      throw new SendMessageError('bad_request', 'pix_key is required for pix messages', 400);
+    }
+    if (!pixKeyType || !['CPF', 'CNPJ', 'EMAIL', 'PHONE', 'RANDOM'].includes(pixKeyType)) {
+      throw new SendMessageError('bad_request', 'pix_key_type must be one of: CPF, CNPJ, EMAIL, PHONE, RANDOM', 400);
+    }
+    if (!merchantName) {
+      throw new SendMessageError('bad_request', 'merchant_name is required for pix messages', 400);
+    }
   }
 
   if (isMediaKind && !mediaUrl) {
@@ -185,6 +255,15 @@ export async function sendMessageToConversation(
     templateParams,
     templateMessageParams,
     replyToMessageId,
+    buttons,
+    headerText,
+    footerText,
+    buttonLabel,
+    sections,
+    pixKey,
+    pixKeyType,
+    merchantName,
+    pixItems,
   } = params;
 
   if (!conversationId) {
@@ -195,7 +274,7 @@ export async function sendMessageToConversation(
     );
   }
 
-  validateSendMessageParams({ messageType, contentText, mediaUrl, templateName });
+  validateSendMessageParams({ messageType, contentText, mediaUrl, templateName, buttons, buttonLabel, sections, pixKey, pixKeyType, merchantName });
 
   const isMediaKind = (MEDIA_KINDS as readonly string[]).includes(messageType);
 
@@ -242,6 +321,15 @@ export async function sendMessageToConversation(
   // RyzeAPI provider — route via RyzeAPI REST API instead of Meta.
   if (provider === 'ryzeapi') {
     return sendRyzeMessage(db, accountId, conversationId, sanitizedPhone, params);
+  }
+
+  // PIX is only available through RyzeAPI (native WhatsApp protocol).
+  if (messageType === 'pix') {
+    throw new SendMessageError(
+      'bad_request',
+      'PIX messages are only available via the RyzeAPI provider. Meta Cloud API does not support PIX cards.',
+      400,
+    );
   }
 
   // WhatsApp config, account-scoped.
@@ -337,6 +425,36 @@ export async function sendMessageToConversation(
         template: templateRow ?? undefined,
         messageParams: templateMessageParams ?? undefined,
         params: templateParams || [],
+        contextMessageId,
+      });
+      return result.messageId;
+    }
+    if (messageType === 'buttons') {
+      const result = await sendInteractiveButtons({
+        phoneNumberId: config.phone_number_id,
+        accessToken,
+        to: phone,
+        bodyText: contentText!,
+        headerText: headerText || undefined,
+        footerText: footerText || undefined,
+        buttons: (buttons ?? []).map((b) => ({ id: b.id, title: b.title })),
+        contextMessageId,
+      });
+      return result.messageId;
+    }
+    if (messageType === 'list') {
+      const result = await sendInteractiveList({
+        phoneNumberId: config.phone_number_id,
+        accessToken,
+        to: phone,
+        bodyText: contentText!,
+        buttonLabel: buttonLabel!,
+        headerText: headerText || undefined,
+        footerText: footerText || undefined,
+        sections: (sections ?? []).map((s) => ({
+          title: s.title,
+          rows: s.rows.map((r) => ({ id: r.id, title: r.title, description: r.description })),
+        })),
         contextMessageId,
       });
       return result.messageId;
@@ -505,6 +623,15 @@ async function sendRyzeMessage(
     mediaUrl,
     filename,
     replyToMessageId,
+    buttons,
+    headerText,
+    footerText,
+    buttonLabel,
+    sections,
+    pixKey,
+    pixKeyType,
+    merchantName,
+    pixItems,
   } = params;
 
   let ryzeMessageId = '';
@@ -516,6 +643,50 @@ async function sendRyzeMessage(
         instance: config.instance_name,
         number: phone,
         message: `[template:${params.templateName}]`,
+      });
+      ryzeMessageId = r.messageId;
+    } else if (messageType === 'buttons') {
+      const r = await sendRyzeButtons({
+        apiUrl: config.api_url,
+        instanceToken,
+        instance: config.instance_name,
+        number: phone,
+        contentText: contentText || '',
+        buttons: (buttons ?? []).map((b) => ({ displayText: b.title, id: b.id })),
+        headerText: headerText || undefined,
+        footerText: footerText || undefined,
+        replyTo: replyToMessageId || undefined,
+      });
+      ryzeMessageId = r.messageId;
+    } else if (messageType === 'list') {
+      const r = await sendRyzeList({
+        apiUrl: config.api_url,
+        instanceToken,
+        instance: config.instance_name,
+        number: phone,
+        contentText: contentText || '',
+        buttonText: buttonLabel || 'View',
+        sections: (sections ?? []).map((s) => ({
+          title: s.title || '',
+          rows: s.rows.map((row) => ({ id: row.id, title: row.title, description: row.description })),
+        })),
+        headerText: headerText || undefined,
+        footerText: footerText || undefined,
+        replyTo: replyToMessageId || undefined,
+      });
+      ryzeMessageId = r.messageId;
+    } else if (messageType === 'pix') {
+      const r = await sendRyzePix({
+        apiUrl: config.api_url,
+        instanceToken,
+        instance: config.instance_name,
+        number: phone,
+        merchantName: merchantName || '',
+        pixKey: pixKey || '',
+        pixKeyType: (pixKeyType || 'RANDOM') as 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'RANDOM',
+        message: contentText || undefined,
+        items: pixItems || undefined,
+        replyTo: replyToMessageId || undefined,
       });
       ryzeMessageId = r.messageId;
     } else if (['image', 'video', 'audio', 'document'].includes(messageType)) {
@@ -596,7 +767,21 @@ async function sendInstagramMessage(
     contentText,
     mediaUrl,
     replyToMessageId,
+    buttons,
+    headerText,
+    footerText,
+    buttonLabel,
+    sections,
   } = params;
+
+  // PIX is not supported on Instagram.
+  if (messageType === 'pix') {
+    throw new SendMessageError(
+      'bad_request',
+      'PIX messages are not supported for Instagram conversations.',
+      400,
+    );
+  }
 
   // Load Instagram config for the account.
   const { data: config, error: configError } = await db
@@ -674,6 +859,27 @@ async function sendInstagramMessage(
         buttons: [
           { type: 'web_url', url: mediaUrl, title: buttonLabel },
         ],
+      });
+      igMessageId = result.messageId;
+    } else if (messageType === 'buttons') {
+      const result = await sendInstagramButton({
+        igUserId,
+        accessToken,
+        to: igRecipientId,
+        text: contentText || '',
+        buttons: (buttons ?? []).map((b) => ({
+          type: 'web_url' as const,
+          url: `https://wacrm.reply/${b.id}`,
+          title: b.title,
+        })),
+      });
+      igMessageId = result.messageId;
+    } else if (messageType === 'list') {
+      const result = await sendInstagramText({
+        igUserId,
+        accessToken,
+        to: igRecipientId,
+        text: `${contentText || ''}\n\n${(sections ?? []).flatMap((s) => s.rows.map((r, i) => `${i + 1}. ${r.title}${r.description ? ` — ${r.description}` : ''}`)).join('\n')}`,
       });
       igMessageId = result.messageId;
     } else {

@@ -56,17 +56,55 @@ const messages: EndpointDoc = {
   description: {
     pt: 'Envia uma mensagem para um contato. WhatsApp (Meta Cloud API ou RyzeAPI) usa número E.164; Instagram usa instagram_id. O endpoint encontra-ou-cria o contato + conversa e roteia automaticamente pelo canal configurado.',
     es: 'Envía un mensaje a un contacto. WhatsApp (Meta Cloud API o RyzeAPI) usa número E.164; Instagram usa instagram_id. El endpoint encuentra-o-crea el contacto + conversación y enruta automáticamente por el canal configurado.',
-    en: 'Send a message to a contact. WhatsApp (Meta Cloud API or RyzeAPI) uses an E.164 number; Instagram uses instagram_id. The endpoint finds-or-creates the contact + conversation and auto-routes through the configured channel.',
+    en: 'Send a message to a contact. WhatsApp (Meta Cloud API or RyzeAPI) uses an E.164 phone number; Instagram uses instagram_id. The endpoint finds-or-creates the contact + conversation and auto-routes through the configured channel.',
   },
   details: [
-    'type is text (default), template, or a media kind (image / video / document / audio). Media needs media_url (and optional filename); text doubles as the caption. template needs a template object.',
+    'type is text (default), template, a media kind (image / video / document / audio), interactive (buttons / list), or pix.',
+    'Text: needs text (body). Template: needs a template object with name, language, and params. Media: needs media_url (and optional filename); text doubles as the caption.',
+    'Buttons (interactive): needs text (body text), buttons (1–3 items, each with id and title). Optional: header_text, footer_text. Supported on Meta, RyzeAPI, and Instagram.',
+    'List (interactive): needs text (body), button_label, sections (1–10 sections, 1–10 rows total). Each row has id and title. Optional: header_text, footer_text. Supported on Meta, RyzeAPI, and Instagram.',
+    'PIX: needs pix_key, pix_key_type (CPF|CNPJ|EMAIL|PHONE|RANDOM), merchant_name. Optional: text (message), pix_items (array of { name, quantity, unit_price }). Available only via RyzeAPI (native WhatsApp protocol).',
     'For RyzeAPI conversations, templates are sent as plain text with [template:name] prefix since RyzeAPI does not support Meta template format.',
     'Instagram conversations use instagram_id instead of phone. Private replies to comments are auto-detected from the conversation.',
+    'Instagram interactive buttons are sent as web_url link buttons. List sections are rendered as plain text.',
   ],
-  curl: `curl -X POST https://your-crm.example.com/api/v1/messages \\
+  curl: `# Text message
+curl -X POST https://your-crm.example.com/api/v1/messages \\
   -H "Authorization: Bearer wacrm_live_xxx" \\
   -H "Content-Type: application/json" \\
-  -d '{ "to": "+14155550123", "type": "text", "text": "Hi 👋" }'`,
+  -d '{ "to": "+14155550123", "type": "text", "text": "Hi 👋" }'
+
+# Interactive buttons
+curl -X POST https://your-crm.example.com/api/v1/messages \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "to": "+14155550123",
+    "type": "buttons",
+    "text": "Would you like to proceed?",
+    "header_text": "Confirm Order",
+    "footer_text": "Reply with your choice",
+    "buttons": [
+      { "id": "yes", "title": "Yes" },
+      { "id": "no", "title": "No" }
+    ]
+  }'
+
+# PIX payment (RyzeAPI only)
+curl -X POST https://your-crm.example.com/api/v1/messages \\
+  -H "Authorization: Bearer wacrm_live_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "to": "+14155550123",
+    "type": "pix",
+    "text": "Payment for Order #123",
+    "pix_key": "123.456.789-00",
+    "pix_key_type": "CPF",
+    "merchant_name": "Acme Store",
+    "pix_items": [
+      { "name": "Widget", "quantity": 2, "unit_price": 49.90 }
+    ]
+  }'`,
   json: `{
   "data": {
     "message_id": "...",
@@ -77,7 +115,8 @@ const messages: EndpointDoc = {
   }
 }`,
   notes: [
-    'Domain error codes: whatsapp_not_configured (400), meta_error (502), template_malformed (500)',
+    'Domain error codes: whatsapp_not_configured (400), meta_error (502), template_malformed (500), ryzeapi_not_configured (400), ryzeapi_error (502), instagram_not_configured (400), instagram_error (502)',
+    'PIX messages are only available via the RyzeAPI provider (native WhatsApp protocol). Meta Cloud API does not support PIX cards.',
   ],
 };
 

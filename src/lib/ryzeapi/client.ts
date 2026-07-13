@@ -538,6 +538,36 @@ export async function sendList(args: SendListArgs): Promise<RyzeApiSendResult> {
   return { messageId: String(r?.messageId ?? r?.message_id ?? r?.id ?? '') }
 }
 
+export interface SendPixArgs {
+  apiUrl: string
+  instanceToken: string
+  instance: string
+  number: string
+  merchantName: string
+  pixKey: string
+  pixKeyType: 'CPF' | 'CNPJ' | 'EMAIL' | 'PHONE' | 'RANDOM'
+  message?: string
+  items?: { name: string; description?: string; quantity: number; unitPrice: number }[]
+  delay?: number
+  replyTo?: string
+}
+
+export async function sendPix(args: SendPixArgs): Promise<RyzeApiSendResult> {
+  const result = await mcpCall(args.apiUrl, args.instanceToken, 'ryzeapi_send_pix', {
+    instance: args.instance,
+    number: args.number,
+    merchantName: args.merchantName,
+    pixKey: args.pixKey,
+    pixKeyType: args.pixKeyType,
+    message: args.message,
+    items: args.items,
+    delay: args.delay,
+    replyTo: args.replyTo,
+  })
+  const r = result as Record<string, unknown>
+  return { messageId: String(r?.messageId ?? r?.message_id ?? r?.id ?? '') }
+}
+
 // ---- Health check (REST) ---------------------------------------------
 
 export async function getHealth(apiUrl: string): Promise<RyzeApiHealth> {

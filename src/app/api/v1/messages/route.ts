@@ -20,7 +20,7 @@
 // Body (by phone):
 //   {
 //     "to": "+14155550123",                 // required, E.164
-//     "type": "text",                        // text|template|image|video|document|audio (default: text)
+//     "type": "text",                        // text|template|image|video|document|audio|buttons|list|pix (default: text)
 //     "text": "Hello!",                      // text body, or media caption
 //     "media_url": "https://…/file.pdf",     // required for image/video/document/audio
 //     "filename": "invoice.pdf",             // optional, document filename
@@ -29,6 +29,21 @@
 //       "language": "en_US",
 //       "params": ["A123"] | { "body": [...] }
 //     },
+//     "buttons": [                           // 1-3 buttons, required when type=buttons
+//       { "id": "yes", "title": "Yes" }
+//     ],
+//     "header_text": "Optional header",      // optional, for buttons/list
+//     "footer_text": "Optional footer",      // optional, for buttons/list
+//     "button_label": "View options",        // required when type=list
+//     "sections": [                          // 1-10 sections, required when type=list
+//       { "title": "Category", "rows": [{ "id": "opt1", "title": "Option 1" }] }
+//     ],
+//     "pix_key": "123.456.789-00",          // required when type=pix (RyzeAPI only)
+//     "pix_key_type": "CPF",                // CPF|CNPJ|EMAIL|PHONE|RANDOM
+//     "merchant_name": "Acme Inc",           // required when type=pix
+//     "pix_items": [                         // optional order items
+//       { "name": "Product A", "quantity": 1, "unit_price": 99.90 }
+//     ],
 //     "reply_to_message_id": "<uuid>",       // optional
 //     "name": "Jane Doe"                     // optional, for newly-created contact
 //   }
@@ -98,6 +113,45 @@ export async function POST(request: Request) {
         ? template.params
         : undefined;
 
+    // Parse buttons: array of { id, title }.
+    const buttons = Array.isArray(body.buttons)
+      ? (body.buttons as unknown[]).filter(
+          (b): b is Record<string, unknown> =>
+            typeof b === 'object' && b !== null && typeof (b as Record<string, unknown>).id === 'string' && typeof (b as Record<string, unknown>).title === 'string',
+        ).map((b) => ({ id: b.id as string, title: b.title as string }))
+      : null;
+
+    // Parse sections: array of { title?, rows: [{ id, title, description? }] }.
+    const sections = Array.isArray(body.sections)
+      ? (body.sections as unknown[]).filter(
+          (s): s is Record<string, unknown> =>
+            typeof s === 'object' && s !== null && Array.isArray((s as Record<string, unknown>).rows),
+        ).map((s) => ({
+          title: typeof s.title === 'string' ? s.title : undefined,
+          rows: ((s.rows as unknown[]) ?? []).filter(
+            (r): r is Record<string, unknown> =>
+              typeof r === 'object' && r !== null && typeof (r as Record<string, unknown>).id === 'string' && typeof (r as Record<string, unknown>).title === 'string',
+          ).map((r) => ({
+            id: r.id as string,
+            title: r.title as string,
+            description: typeof r.description === 'string' ? r.description : undefined,
+          })),
+        }))
+      : null;
+
+    // Parse PIX items.
+    const pixItems = Array.isArray(body.pix_items)
+      ? (body.pix_items as unknown[]).filter(
+          (i): i is Record<string, unknown> =>
+            typeof i === 'object' && i !== null && typeof (i as Record<string, unknown>).name === 'string',
+        ).map((i) => ({
+          name: i.name as string,
+          description: typeof i.description === 'string' ? i.description : undefined,
+          quantity: typeof i.quantity === 'number' ? i.quantity : 1,
+          unitPrice: typeof i.unit_price === 'number' ? i.unit_price : 0,
+        }))
+      : null;
+
     // Validate the message shape BEFORE resolving the conversation
     // so a bad payload 400s without leaving an orphan contact/conversation behind.
     validateSendMessageParams({
@@ -105,6 +159,12 @@ export async function POST(request: Request) {
       contentText: typeof body.text === 'string' ? body.text : null,
       mediaUrl: typeof body.media_url === 'string' ? body.media_url : null,
       templateName: typeof template?.name === 'string' ? template.name : null,
+      buttons,
+      buttonLabel: typeof body.button_label === 'string' ? body.button_label : null,
+      sections,
+      pixKey: typeof body.pix_key === 'string' ? body.pix_key : null,
+      pixKeyType: typeof body.pix_key_type === 'string' ? body.pix_key_type : null,
+      merchantName: typeof body.merchant_name === 'string' ? body.merchant_name : null,
     });
 
     let conversationId: string
@@ -159,6 +219,15 @@ export async function POST(request: Request) {
           typeof body.reply_to_message_id === 'string'
             ? body.reply_to_message_id
             : null,
+        buttons,
+        headerText: typeof body.header_text === 'string' ? body.header_text : null,
+        footerText: typeof body.footer_text === 'string' ? body.footer_text : null,
+        buttonLabel: typeof body.button_label === 'string' ? body.button_label : null,
+        sections,
+        pixKey: typeof body.pix_key === 'string' ? body.pix_key : null,
+        pixKeyType: typeof body.pix_key_type === 'string' ? body.pix_key_type : null,
+        merchantName: typeof body.merchant_name === 'string' ? body.merchant_name : null,
+        pixItems,
       },
     )
 
