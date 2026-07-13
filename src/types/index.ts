@@ -437,7 +437,10 @@ export type AutomationStepType =
   | 'wait'
   | 'condition'
   | 'send_webhook'
-  | 'close_conversation';
+  | 'close_conversation'
+  | 'ai_condition'
+  | 'ai_reply'
+  | 'ai_extract';
 
 export type AutomationLogStatus = 'success' | 'partial' | 'failed';
 
@@ -531,6 +534,28 @@ export interface SendWebhookStepConfig {
   body_template?: string;
 }
 
+export interface AiConditionStepConfig {
+  /** Classification prompt. The model will answer YES or NO. */
+  prompt: string;
+}
+
+export interface AiReplyStepConfig {
+  /** Instruction for generating the reply. Supports {{ vars.* }} / {{ message.text }}. */
+  prompt: string;
+}
+
+export interface AiExtractField {
+  key: string;
+  description: string;
+}
+
+export interface AiExtractStepConfig {
+  /** Extraction instructions. The model returns JSON. */
+  prompt: string;
+  /** Fields to extract. Each field is saved as {{ vars.<key> }}. */
+  fields: AiExtractField[];
+}
+
 export type AutomationStepConfig =
   | SendMessageStepConfig
   | SendTemplateStepConfig
@@ -541,6 +566,9 @@ export type AutomationStepConfig =
   | WaitStepConfig
   | ConditionStepConfig
   | SendWebhookStepConfig
+  | AiConditionStepConfig
+  | AiReplyStepConfig
+  | AiExtractStepConfig
   | Record<string, never>
   | Record<string, unknown>;
 

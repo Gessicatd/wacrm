@@ -3,6 +3,9 @@ import type {
   AutomationLogStepResult,
   AutomationStep,
   AutomationTriggerType,
+  AiConditionStepConfig,
+  AiReplyStepConfig,
+  AiExtractStepConfig,
   ConditionStepConfig,
   KeywordMatchTriggerConfig,
   SendMessageStepConfig,
@@ -16,6 +19,10 @@ import type {
 } from '@/types'
 import { supabaseAdmin } from './admin-client'
 import { engineSendText, engineSendTemplate } from './meta-send'
+import { generateReply } from '@/lib/ai/generate'
+import { loadAiConfig } from '@/lib/ai/config'
+import { buildConversationContext } from '@/lib/ai/context'
+import type { ChatMessage } from '@/lib/ai/types'
 
 // ------------------------------------------------------------
 // Public API
@@ -331,6 +338,25 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
         continue
       }
 
+      if (step.step_type === 'ai_condition') {
+        const cfg = step.step_config as AiConditionStepConfig
+        const taken = await evaluateAiCondition(cfg, args)
+        results.push({
+          step_id: step.id,
+          step_type: 'ai_condition',
+          status: 'success',
+          detail: `ai_branch=${taken ? 'yes' : 'no'}`,
+        })
+        await executeStepsFrom({
+          ...args,
+          parentStepId: step.id,
+          branch: taken ? 'yes' : 'no',
+          startPosition: 0,
+          logId: args.logId,
+        })
+        continue
+      }
+
       const detail = await runStep(step, args)
       results.push({
         step_id: step.id,
@@ -570,6 +596,50 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       return 'conversation closed'
     }
 
+    case 'ai_reply': {
+      const aiCfg = step.step_config as AiReplyStepConfig
+      if (!args.contactId) throw new Error('ai_reply needs a contact')
+      const providerConfig = await loadAiConfigSafe(db, args.automation.account_id)
+      const conversationId = await resolveConversationId(args)
+      const systemPrompt = interpolate(aiCfg.prompt, args)
+      const messages = await buildConversationContext(db, conversationId)
+      const result = await generateReply({ config: providerConfig, systemPrompt, messages })
+      if (!result.text.trim() || result.handoff) {
+        return 'ai_reply skipped (empty/handoff)'
+      }
+      const { whatsapp_message_id } = await engineSendText({
+        accountId: args.automation.account_id,
+        userId: args.automation.user_id,
+        conversationId,
+        contactId: args.contactId,
+        text: result.text,
+      })
+      return `ai_reply sent (${whatsapp_message_id})`
+    }
+
+    case 'ai_extract': {
+      const extCfg = step.step_config as AiExtractStepConfig
+      const providerConfig = await loadAiConfigSafe(db, args.automation.account_id)
+      const fieldDescriptions = (extCfg.fields ?? [])
+        .map((f) => `- ${f.key}: ${f.description}`)
+        .join('\n')
+      const systemPrompt = `You extract data from user messages. ${extCfg.prompt}\n\nReturn ONLY a valid JSON object with these fields:\n${fieldDescriptions}\n\nNo explanation, no markdown.`
+      const messages: ChatMessage[] = args.context.message_text
+        ? [{ role: 'user', content: args.context.message_text }]
+        : []
+      if (messages.length === 0) return 'ai_extract skipped: no message text'
+      const result = await generateReply({ config: providerConfig, systemPrompt, messages })
+      const parsed = tryParseJson(result.text)
+      if (!parsed) {
+        throw new Error(`ai_extract: invalid JSON returned by model. Raw:\n${result.text}`)
+      }
+      if (!args.context.vars) args.context.vars = {}
+      for (const [key, value] of Object.entries(parsed)) {
+        args.context.vars[key] = value
+      }
+      return `ai_extract: ${Object.keys(parsed).join(', ')}`
+    }
+
     default:
       return `unknown step: ${step.step_type}`
   }
@@ -730,4 +800,58 @@ async function markPending(id: string, status: 'done' | 'failed') {
     .from('automation_pending_executions')
     .update({ status })
     .eq('id', id)
+}
+
+// ------------------------------------------------------------
+// AI helpers
+// ------------------------------------------------------------
+
+/**
+ * Load AI config or throw a user-friendly error. Exists as a separate
+ * function so every AI step handler doesn't duplicate the error message.
+ */
+async function loadAiConfigSafe(db: ReturnType<typeof supabaseAdmin>, accountId: string) {
+  const cfg = await loadAiConfig(db, accountId)
+  if (!cfg) {
+    throw new Error(
+      'AI Assistant not configured. Go to Settings → AI Assistant to set up your provider and API key.',
+    )
+  }
+  return cfg
+}
+
+/**
+ * Evaluate an ai_condition step: ask the model to classify the message
+ * as YES or NO. Returns true if the model says YES, false otherwise.
+ */
+async function evaluateAiCondition(cfg: AiConditionStepConfig, args: ExecuteArgs): Promise<boolean> {
+  const db = supabaseAdmin()
+  const providerConfig = await loadAiConfigSafe(db, args.automation.account_id)
+  const systemPrompt = `You are a binary classifier. Answer ONLY with "YES" or "NO".\n\n${cfg.prompt}`
+  const messageText = args.context.message_text ?? ''
+  if (!messageText.trim()) return false
+  const messages: ChatMessage[] = [{ role: 'user', content: messageText }]
+  const result = await generateReply({ config: providerConfig, systemPrompt, messages })
+  const answer = result.text.trim().toUpperCase()
+  return answer.startsWith('YES')
+}
+
+/**
+ * Attempt to parse a JSON object from a model response. Handles both
+ * raw JSON and JSON wrapped in markdown code fences.
+ */
+function tryParseJson(raw: string): Record<string, unknown> | null {
+  // Strip markdown code fences if present
+  let cleaned = raw.trim()
+  const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fenceMatch) cleaned = fenceMatch[1].trim()
+  try {
+    const parsed = JSON.parse(cleaned)
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+    return null
+  } catch {
+    return null
+  }
 }

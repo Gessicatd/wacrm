@@ -33,6 +33,11 @@ import {
   RefreshCw,
   ImageIcon,
   Check,
+  Bot,
+  BrainCircuit,
+  ScanText,
+  PlusCircle,
+  X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -106,6 +111,9 @@ const STEP_META: Record<AutomationStepType, StepMeta> = {
   condition: { label: "Condition (If/Else)", icon: GitBranch, border: "border-l-amber-500" },
   send_webhook: { label: "Send Webhook", icon: Webhook, border: "border-l-primary" },
   close_conversation: { label: "Close Conversation", icon: CircleSlash, border: "border-l-primary" },
+  ai_condition: { label: "AI Condition", icon: BrainCircuit, border: "border-l-purple-500" },
+  ai_reply: { label: "AI Reply", icon: Bot, border: "border-l-purple-500" },
+  ai_extract: { label: "AI Extract", icon: ScanText, border: "border-l-purple-500" },
 }
 
 const ADDABLE_STEPS: AutomationStepType[] = [
@@ -120,6 +128,9 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "condition",
   "send_webhook",
   "close_conversation",
+  "ai_condition",
+  "ai_reply",
+  "ai_extract",
 ]
 
 const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: string }[] = [
@@ -168,6 +179,12 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
       return { url: "", headers: {}, body_template: "" }
     case "close_conversation":
       return {}
+    case "ai_condition":
+      return { prompt: "" }
+    case "ai_reply":
+      return { prompt: "" }
+    case "ai_extract":
+      return { prompt: "", fields: [] }
     default:
       return {}
   }
@@ -1582,9 +1599,123 @@ function StepEditor({
           Sets the conversation status to &quot;closed&quot;. No configuration needed.
         </p>
       )
+    case "ai_condition":
+      return (
+        <>
+          <FieldBlock label="Classification prompt">
+            <Textarea
+              value={(cfg.prompt as string) ?? ""}
+              onChange={(e) => set({ prompt: e.target.value })}
+              placeholder='Is the customer expressing urgency or frustration? Answer YES or NO.'
+              className="min-h-20 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <p className="text-xs text-muted-foreground">
+            The model will classify the message and branch to YES or NO. Write a clear,
+            specific question. Supports <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{'{{message.text}}'}</code>.
+          </p>
+        </>
+      )
+    case "ai_reply":
+      return (
+        <>
+          <FieldBlock label="Reply prompt">
+            <Textarea
+              value={(cfg.prompt as string) ?? ""}
+              onChange={(e) => set({ prompt: e.target.value })}
+              placeholder="You are a helpful support agent. Respond to the customer's question about pricing."
+              className="min-h-20 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <p className="text-xs text-muted-foreground">
+            The model will generate and send a reply based on the conversation history.
+            Supports <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{'{{vars.*}}'}</code> and <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{'{{message.text}}'}</code>.
+            If the model emits <code className="rounded bg-muted px-1 py-0.5 text-[11px]">[[HANDOFF]]</code> the reply is skipped.
+          </p>
+        </>
+      )
+    case "ai_extract":
+      return (
+        <>
+          <FieldBlock label="Extraction prompt">
+            <Textarea
+              value={(cfg.prompt as string) ?? ""}
+              onChange={(e) => set({ prompt: e.target.value })}
+              placeholder="Extract order details from the customer message."
+              className="min-h-20 bg-muted text-foreground"
+            />
+          </FieldBlock>
+          <FieldBlock label="Fields">
+            <AiExtractFieldsEditor
+              fields={(cfg.fields as { key: string; description: string }[]) ?? []}
+              onChange={(fields) => set({ fields })}
+            />
+          </FieldBlock>
+          <p className="text-xs text-muted-foreground">
+            The model extracts data and saves each field to <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{'{{vars.<key>}}'}</code>.
+            Use these variables in later steps like Send Message or Create Deal.
+          </p>
+        </>
+      )
     default:
       return null
   }
+}
+
+function AiExtractFieldsEditor({
+  fields,
+  onChange,
+}: {
+  fields: { key: string; description: string }[]
+  onChange: (fields: { key: string; description: string }[]) => void
+}) {
+  return (
+    <div className="space-y-2">
+      {fields.map((f, i) => (
+        <div key={i} className="flex items-start gap-1.5">
+          <div className="flex-1 space-y-1">
+            <Input
+              placeholder="Key (e.g. nome)"
+              value={f.key}
+              onChange={(e) => {
+                const next = [...fields]
+                next[i] = { ...next[i], key: e.target.value }
+                onChange(next)
+              }}
+              className="bg-muted text-foreground text-xs"
+            />
+            <Input
+              placeholder="Description (e.g. Nome do cliente)"
+              value={f.description}
+              onChange={(e) => {
+                const next = [...fields]
+                next[i] = { ...next[i], description: e.target.value }
+                onChange(next)
+              }}
+              className="bg-muted text-foreground text-xs"
+            />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-0.5 h-7 w-7 shrink-0 p-0 text-muted-foreground hover:text-red-400"
+            onClick={() => onChange(fields.filter((_, idx) => idx !== i))}
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ))}
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 w-full border-dashed text-xs text-muted-foreground hover:text-foreground"
+        onClick={() => onChange([...fields, { key: "", description: "" }])}
+      >
+        <PlusCircle className="mr-1 h-3 w-3" />
+        Add field
+      </Button>
+    </div>
+  )
 }
 
 function FieldBlock({
@@ -1614,6 +1745,15 @@ function previewFor(step: BuilderStep): string {
       return `when ${step.step_config.subject ?? "?"}`
     case "send_webhook":
       return (step.step_config.url as string) || "no url"
+    case "ai_condition":
+      return (step.step_config.prompt as string) || "no prompt"
+    case "ai_reply":
+      return (step.step_config.prompt as string) || "no prompt"
+    case "ai_extract":
+      const f = step.step_config.fields as { key: string }[] | undefined
+      return f && f.length > 0
+        ? `${f.length} field(s)`
+        : "no fields"
     default:
       return ""
   }

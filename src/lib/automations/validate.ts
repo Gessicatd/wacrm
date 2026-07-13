@@ -43,7 +43,7 @@ function walk(steps: StepLike[], prefix: string, issues: ValidationIssue[]): voi
   steps.forEach((s, i) => {
     const path = `${prefix}steps[${i}]`
     validateOne(s, path, issues)
-    if (s.step_type === 'condition' && s.branches) {
+    if ((s.step_type === 'condition' || s.step_type === 'ai_condition') && s.branches) {
       if (s.branches.yes) walk(s.branches.yes, `${path}.yes.`, issues)
       if (s.branches.no) walk(s.branches.no, `${path}.no.`, issues)
     }
@@ -134,6 +134,34 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
       break
     case 'close_conversation':
       // No config required.
+      break
+    case 'ai_condition':
+      if (!nonEmpty(c.prompt)) {
+        issues.push({ path: `${path}.prompt`, message: 'classification prompt is required' })
+      }
+      break
+    case 'ai_reply':
+      if (!nonEmpty(c.prompt)) {
+        issues.push({ path: `${path}.prompt`, message: 'reply prompt is required' })
+      }
+      break
+    case 'ai_extract':
+      if (!nonEmpty(c.prompt)) {
+        issues.push({ path: `${path}.prompt`, message: 'extraction prompt is required' })
+      }
+      if (!Array.isArray(c.fields) || c.fields.length === 0) {
+        issues.push({ path: `${path}.fields`, message: 'at least one field is required' })
+      } else {
+        for (let fi = 0; fi < (c.fields as unknown[]).length; fi++) {
+          const f = (c.fields as Record<string, unknown>[])[fi]
+          if (!nonEmpty(f.key)) {
+            issues.push({ path: `${path}.fields[${fi}].key`, message: 'field key is required' })
+          }
+          if (!nonEmpty(f.description)) {
+            issues.push({ path: `${path}.fields[${fi}].description`, message: 'field description is required' })
+          }
+        }
+      }
       break
     default:
       issues.push({ path, message: `unknown step type: ${step.step_type}` })
