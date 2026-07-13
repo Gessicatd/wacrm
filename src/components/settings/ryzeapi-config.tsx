@@ -23,6 +23,15 @@ import { SettingsPanelHead } from './settings-panel-head';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'pending_qr' | 'unknown';
 
+function generateRandomSuffix(length: number): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
+
 interface ConfigShape {
   instance_name?: string;
   api_url?: string;
@@ -40,8 +49,6 @@ export function RyzeApiConfig() {
   const [config, setConfig] = useState<ConfigShape | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('unknown');
 
-  const [apiUrl, setApiUrl] = useState('');
-  const [adminToken, setAdminToken] = useState('');
   const [instanceName, setInstanceName] = useState('');
   const [qrExpiry, setQrExpiry] = useState<string | null>(null);
   const [pollTimer, setPollTimer] = useState<ReturnType<typeof setInterval> | null>(null);
@@ -60,13 +67,11 @@ export function RyzeApiConfig() {
       if (res.ok) {
         const data = (await res.json()) as ConfigShape;
         setConfig(data);
-        setApiUrl(data.api_url ?? '');
         setInstanceName(data.instance_name ?? '');
         setStatus(data.status ?? 'disconnected');
         setQrExpiry(data.qr_expires_at ?? null);
       } else {
         setConfig(null);
-        setApiUrl('');
         setInstanceName('');
         setStatus('disconnected');
         setQrExpiry(null);
@@ -101,14 +106,6 @@ export function RyzeApiConfig() {
   }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCreate() {
-    if (!apiUrl.trim()) {
-      toast.error('RyzeAPI Server URL is required');
-      return;
-    }
-    if (!adminToken.trim()) {
-      toast.error('Admin Token is required');
-      return;
-    }
     if (!instanceName.trim()) {
       toast.error('Instance Name is required');
       return;
@@ -116,14 +113,15 @@ export function RyzeApiConfig() {
 
     setSaving(true);
     try {
+      const suffix = generateRandomSuffix(6);
+      const fullName = `${instanceName.trim()}-${suffix}`;
+
       const res = await fetch('/api/ryzeapi/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create',
-          api_url: apiUrl.trim(),
-          admin_token: adminToken.trim(),
-          instance_name: instanceName.trim(),
+          instance_name: fullName,
           webhook_url: webhookUrl,
         }),
       });
@@ -137,7 +135,6 @@ export function RyzeApiConfig() {
       setConfig(data.config);
       setStatus('pending_qr');
       setQrExpiry(data.config?.qr_expires_at ?? null);
-      setAdminToken('');
       toast.success('Instance created. Scan the QR code in WhatsApp.');
     } catch {
       toast.error('Could not reach the RyzeAPI server');
@@ -240,7 +237,6 @@ export function RyzeApiConfig() {
       }
       toast.success('RyzeAPI config removed.');
       setConfig(null);
-      setAdminToken('');
       setInstanceName('');
       setStatus('disconnected');
       setQrExpiry(null);
@@ -363,37 +359,10 @@ export function RyzeApiConfig() {
               <CardHeader>
                 <CardTitle className="text-foreground">RyzeAPI Server</CardTitle>
                 <CardDescription className="text-muted-foreground">
-                  Enter your self-hosted RyzeAPI server details. An instance will be created on your server.
+                  Enter a name for the new WhatsApp instance. Your server credentials are managed via environment variables.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">RyzeAPI Server URL</Label>
-                  <Input
-                    placeholder="https://my-ryzeapi.example.com"
-                    value={apiUrl}
-                    onChange={(e) => setApiUrl(e.target.value)}
-                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Base URL of your RyzeAPI instance (e.g. https://api.mydomain.com).
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Admin Token</Label>
-                  <Input
-                    type="password"
-                    placeholder="Enter your admin token"
-                    value={adminToken}
-                    onChange={(e) => setAdminToken(e.target.value)}
-                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    A token with permission to create and manage instances on the server.
-                  </p>
-                </div>
-
                 <div className="space-y-2">
                   <Label className="text-muted-foreground">Instance Name</Label>
                   <Input
@@ -403,7 +372,7 @@ export function RyzeApiConfig() {
                     className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
                   />
                   <p className="text-xs text-muted-foreground">
-                    A unique name for this WhatsApp instance (kebab-case recommended).
+                    A unique name for this WhatsApp instance. 6 random characters will be appended (e.g. <strong>my-wacrm-bot-a3b7x9</strong>).
                   </p>
                 </div>
               </CardContent>

@@ -110,7 +110,10 @@ export async function GET() {
 /**
  * POST /api/ryzeapi/config
  *
- * Body: { action, api_url?, admin_token?, instance_name?, webhook_url? }
+ * Body: { action, instance_name?, webhook_url? }
+ *
+ * api_url and admin_token are read from RYZEAPI_API_URL and
+ * RYZEAPI_ADMIN_TOKEN environment variables.
  *
  * Actions:
  *   'create'  — creates instance on RyzeAPI, triggers QR, stores config
@@ -230,8 +233,8 @@ async function handleCreate(
   userId: string,
   body: Record<string, unknown>,
 ) {
-  const apiUrl = String(body.api_url ?? '').trim()
-  const adminToken = String(body.admin_token ?? '').trim()
+  const apiUrl = (process.env.RYZEAPI_API_URL ?? '').trim()
+  const adminToken = (process.env.RYZEAPI_ADMIN_TOKEN ?? '').trim()
   const instanceName = String(body.instance_name ?? '').trim()
   const baseWebhookUrl = String(body.webhook_url ?? '').trim()
   // Append instance name as query param so the webhook handler can
@@ -241,9 +244,16 @@ async function handleCreate(
     ? `${baseWebhookUrl}?instance=${encodeURIComponent(instanceName)}`
     : ''
 
-  if (!apiUrl || !adminToken || !instanceName) {
+  if (!apiUrl || !adminToken) {
     return NextResponse.json(
-      { error: 'api_url, admin_token, and instance_name are required' },
+      { error: 'RYZEAPI_API_URL and RYZEAPI_ADMIN_TOKEN must be set in .env' },
+      { status: 500 },
+    )
+  }
+
+  if (!instanceName) {
+    return NextResponse.json(
+      { error: 'instance_name is required' },
       { status: 400 },
     )
   }
