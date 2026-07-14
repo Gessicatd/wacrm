@@ -5,6 +5,10 @@ vi.mock('./meta-api', () => ({
   uploadResumableMedia: vi.fn(async () => ({ handle: 'HANDLE123' })),
 }));
 
+vi.mock('@/lib/webhooks/ssrf', () => ({
+  isDeliverableUrl: vi.fn(async (url: string) => url.startsWith('https://')),
+}));
+
 import { ensureImageHeaderHandle } from './template-header-handle';
 import { uploadResumableMedia } from './meta-api';
 import type { TemplatePayload } from './template-validators';

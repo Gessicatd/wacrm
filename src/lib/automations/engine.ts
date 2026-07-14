@@ -23,6 +23,30 @@ import { generateReply } from '@/lib/ai/generate'
 import { loadAiConfig } from '@/lib/ai/config'
 import { buildConversationContext } from '@/lib/ai/context'
 import type { ChatMessage } from '@/lib/ai/types'
+import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+
+// ------------------------------------------------------------
+// Header sanitization for send_webhook
+// ------------------------------------------------------------
+
+const BLOCKED_HEADERS = new Set([
+  'host', 'authorization', 'cookie', 'set-cookie',
+  'content-length', 'transfer-encoding', 'connection',
+  'expect', 'upgrade', 'proxy-authorization',
+  'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto',
+  'x-real-ip', 'forwarded',
+])
+
+function sanitizeWebhookHeaders(raw: Record<string, string> | undefined): Record<string, string> {
+  if (!raw) return {}
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    if (!BLOCKED_HEADERS.has(k.toLowerCase())) {
+      out[k] = v
+    }
+  }
+  return out
+}
 
 // ------------------------------------------------------------
 // Public API
@@ -576,10 +600,16 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'send_webhook': {
       const cfg = step.step_config as SendWebhookStepConfig
       if (!cfg.url) throw new Error('send_webhook needs url')
+
+      if (!(await isDeliverableUrl(cfg.url))) {
+        throw new Error('webhook URL resolves to a non-public address')
+      }
+
       const body = cfg.body_template ? interpolate(cfg.body_template, args) : JSON.stringify(args.context)
       const res = await fetch(cfg.url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', ...(cfg.headers ?? {}) },
+        redirect: 'manual',
+        headers: { 'content-type': 'application/json', ...sanitizeWebhookHeaders(cfg.headers) },
         body,
       })
       if (!res.ok) throw new Error(`webhook returned ${res.status}`)

@@ -1,5 +1,6 @@
 import { uploadResumableMedia } from '@/lib/whatsapp/meta-api'
 import type { TemplatePayload } from '@/lib/whatsapp/template-validators'
+import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 
 /**
  * Meta requires an `example.header_handle` (from the Resumable Upload
@@ -35,6 +36,11 @@ export async function ensureImageHeaderHandle(
 
   // Fetch the sample image bytes (works for our uploaded chat-media URL
   // and for a manually-pasted public link).
+
+  if (!(await isDeliverableUrl(payload.header_media_url))) {
+    throw new Error('Header image URL resolves to a non-public address.')
+  }
+
   let res: Response
   try {
     res = await fetch(payload.header_media_url)

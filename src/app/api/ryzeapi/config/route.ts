@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption'
+import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import {
   createInstance,
   connectInstance,
@@ -247,6 +248,13 @@ async function handleCreate(
   if (!apiUrl || !adminToken) {
     return NextResponse.json(
       { error: 'RYZEAPI_API_URL and RYZEAPI_ADMIN_TOKEN must be set in .env' },
+      { status: 500 },
+    )
+  }
+
+  if (!(await isDeliverableUrl(apiUrl))) {
+    return NextResponse.json(
+      { error: 'RYZEAPI_API_URL resolves to a non-public address — check .env' },
       { status: 500 },
     )
   }

@@ -1,4 +1,5 @@
 import type { AutomationTriggerType } from '@/types'
+import { isPrivateOrReservedIp } from '@/lib/webhooks/ssrf'
 
 // ------------------------------------------------------------
 // Pre-flight config validation for automations about to be activated.
@@ -126,6 +127,20 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
           issues.push({
             path: `${path}.url`,
             message: 'webhook URL must use http or https',
+          })
+        }
+        // Reject literal private/loopback IPs at save time (sync check).
+        // DNS-based bypass requires the async isDeliverableUrl at runtime.
+        const h = u.hostname.toLowerCase()
+        if (
+          h === 'localhost' ||
+          h.endsWith('.local') ||
+          h.endsWith('.internal') ||
+          (h.match(/^[\d.]+$/) && isPrivateOrReservedIp(h))
+        ) {
+          issues.push({
+            path: `${path}.url`,
+            message: 'webhook URL cannot point to a private, loopback, or reserved address',
           })
         }
       } catch {
