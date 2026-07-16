@@ -3,7 +3,6 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentAccount } from '@/lib/auth/account';
 import { deleteAccountMedia, MEDIA_LIBRARY_BUCKET } from '@/lib/storage/upload-media';
 
@@ -12,8 +11,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { accountId } = await getCurrentAccount();
-    const supabase = await createClient();
+    const { accountId, supabase } = await getCurrentAccount();
     const { id } = await params;
 
     const { data: asset, error: fetchErr } = await supabase
@@ -38,7 +36,7 @@ export async function DELETE(
     }
 
     const path = asset.media_url.split('/').slice(-2).join('/');
-    await deleteAccountMedia(MEDIA_LIBRARY_BUCKET, path).catch(() => {});
+    await deleteAccountMedia(MEDIA_LIBRARY_BUCKET, path, supabase).catch(() => {});
 
     return NextResponse.json({ data: { deleted: true } });
   } catch (err) {

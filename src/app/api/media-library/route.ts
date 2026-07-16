@@ -4,7 +4,6 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentAccount } from '@/lib/auth/account';
 import {
   uploadAccountMedia,
@@ -19,8 +18,7 @@ import {
 
 export async function GET(request: Request) {
   try {
-    const { accountId, userId } = await getCurrentAccount();
-    const supabase = await createClient();
+    const { accountId, supabase } = await getCurrentAccount();
     const url = new URL(request.url);
     const search = url.searchParams.get('search') ?? '';
     const tag = url.searchParams.get('tag');
@@ -67,8 +65,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { accountId, userId } = await getCurrentAccount();
-    const supabase = await createClient();
+    const { accountId, userId, supabase } = await getCurrentAccount();
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -118,7 +115,7 @@ export async function POST(request: Request) {
       .single();
 
     if (insertErr || !asset) {
-      await deleteAccountMedia(MEDIA_LIBRARY_BUCKET, path).catch(() => {});
+      await deleteAccountMedia(MEDIA_LIBRARY_BUCKET, path, supabase).catch(() => {});
       return NextResponse.json({ error: 'Failed to create media asset' }, { status: 500 });
     }
 

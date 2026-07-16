@@ -4,14 +4,12 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentAccount } from '@/lib/auth/account';
 import { serializeMediaTag } from '@/lib/api/v1/media-library';
 
 export async function GET() {
   try {
-    const { accountId } = await getCurrentAccount();
-    const supabase = await createClient();
+    const { accountId, supabase } = await getCurrentAccount();
 
     const { data, error } = await supabase
       .from('media_tags')
@@ -36,8 +34,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { accountId } = await getCurrentAccount();
-    const supabase = await createClient();
+    const { accountId, supabase } = await getCurrentAccount();
 
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!body || typeof body !== 'object') {
