@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * Shared media-upload helper for Supabase Storage buckets that use the
@@ -82,8 +83,9 @@ export interface UploadAccountMediaResult {
 export async function uploadAccountMedia(
   bucket: string,
   file: File,
+  client?: SupabaseClient,
 ): Promise<UploadAccountMediaResult> {
-  const supabase = createClient();
+  const supabase = client ?? createClient();
 
   const {
     data: { user },

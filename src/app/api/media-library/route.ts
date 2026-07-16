@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     let publicUrl: string;
     let path: string;
     try {
-      const result = await uploadAccountMedia(MEDIA_LIBRARY_BUCKET, file);
+      const result = await uploadAccountMedia(MEDIA_LIBRARY_BUCKET, file, supabase);
       publicUrl = result.publicUrl;
       path = result.path;
     } catch (err) {
