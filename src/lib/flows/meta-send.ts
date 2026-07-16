@@ -20,6 +20,7 @@ import {
   sendList as sendRyzeList,
 } from '@/lib/ryzeapi/client'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { getRefreshedAccessToken } from '@/lib/instagram/token-refresh'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -296,7 +297,7 @@ async function sendTextViaInstagram(
     throw new Error('Instagram not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const accessToken = await getRefreshedAccessToken(config)
   const igUserId = config.instagram_business_account_id
 
   const commentId = await resolveCommentId(db, args.conversationId)
@@ -552,7 +553,7 @@ async function sendMediaViaInstagram(
     throw new Error('Instagram not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const accessToken = await getRefreshedAccessToken(config)
   const igUserId = config.instagram_business_account_id
   const igKind: 'image' | 'video' | 'audio' | 'file' =
     args.kind === 'document' ? 'file' : args.kind
@@ -882,7 +883,7 @@ async function sendInteractiveViaInstagram(
     throw new Error('Instagram not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
+  const accessToken = await getRefreshedAccessToken(config)
   const igUserId = config.instagram_business_account_id
   const to = contact.instagram_id
 
