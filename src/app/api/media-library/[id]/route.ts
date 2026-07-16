@@ -4,6 +4,7 @@
 
 import { NextResponse } from 'next/server';
 import { getCurrentAccount } from '@/lib/auth/account';
+import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { deleteAccountMedia, MEDIA_LIBRARY_BUCKET } from '@/lib/storage/upload-media';
 
 export async function DELETE(
@@ -14,7 +15,9 @@ export async function DELETE(
     const { accountId, supabase } = await getCurrentAccount();
     const { id } = await params;
 
-    const { data: asset, error: fetchErr } = await supabase
+    const admin = supabaseAdmin()
+
+    const { data: asset, error: fetchErr } = await admin
       .from('media_assets')
       .select('media_url')
       .eq('id', id)
@@ -25,7 +28,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Media asset not found' }, { status: 404 });
     }
 
-    const { error: deleteErr } = await supabase
+    const { error: deleteErr } = await admin
       .from('media_assets')
       .delete()
       .eq('id', id)
