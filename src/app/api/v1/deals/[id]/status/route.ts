@@ -26,10 +26,14 @@ export async function POST(
     if (!VALID_STATUSES.includes(status as typeof VALID_STATUSES[number])) {
       return fail('bad_request', `'status' must be one of: ${VALID_STATUSES.join(', ')}`, 400);
     }
+    const lossReason = typeof body.loss_reason === 'string' ? body.loss_reason.trim() : '';
+    if (status === 'lost' && !lossReason) {
+      return fail('bad_request', "'loss_reason' is required when status is 'lost'", 400);
+    }
 
     const { error } = await ctx.supabase
       .from('deals')
-      .update({ status, updated_at: new Date().toISOString() })
+      .update({ status, loss_reason: status === 'lost' ? lossReason : null, updated_at: new Date().toISOString() })
       .eq('id', id)
       .eq('account_id', ctx.accountId);
 

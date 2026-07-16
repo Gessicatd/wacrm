@@ -2,7 +2,6 @@ import { requireApiKey } from '@/lib/auth/api-context';
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
 import {
   getDealById,
-  serializeDeal,
 } from '@/lib/api/v1/deals';
 import { verifyPipelineAccess, verifyStageAccess } from '@/lib/api/v1/pipelines';
 
@@ -39,7 +38,20 @@ export async function PATCH(
 
     const scalarFields = ['title', 'notes'] as const;
     const numericFields = ['value'] as const;
-    const nullableFields = ['expected_close_date', 'assigned_to', 'conversation_id', 'currency'] as const;
+    const nullableFields = [
+      'expected_close_date', 'assigned_to', 'conversation_id', 'currency',
+      'service_name', 'unit_name', 'professional_name', 'source_channel', 'campaign_name',
+      'appointment_at', 'next_action', 'next_action_at', 'next_action_channel',
+      'objection_code', 'loss_reason', 'recycle_at', 'consent_source',
+      'consent_recorded_at', 'handoff_notes',
+    ] as const;
+    const enumFields = {
+      lead_intent: ['unknown', 'low', 'medium', 'high'],
+      appointment_status: ['not_scheduled', 'scheduled', 'confirmed', 'completed', 'no_show', 'cancelled', 'rescheduled'],
+      forecast_category: ['unclassified', 'commit', 'best_case', 'stretch'],
+      consent_status: ['unknown', 'granted', 'revoked', 'not_required'],
+      handoff_status: ['not_started', 'pending', 'complete', 'blocked'],
+    } as const;
     const refFields = ['pipeline_id', 'stage_id', 'contact_id'] as const;
 
     const updates: Record<string, unknown> = {};
@@ -93,6 +105,15 @@ export async function PATCH(
           .eq('account_id', ctx.accountId)
           .maybeSingle();
         if (!contact) return fail('bad_request', 'Contact not found in your account', 400);
+      }
+      updates[field] = value;
+    }
+
+    for (const [field, allowed] of Object.entries(enumFields)) {
+      if (!(field in body)) continue;
+      const value = body[field];
+      if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value)) {
+        return fail('bad_request', `'${field}' has an invalid value`, 400);
       }
       updates[field] = value;
     }

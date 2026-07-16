@@ -1,8 +1,9 @@
 "use client";
 
 import type { Deal, PipelineStage } from "@/types";
-import { Calendar, Check, X } from "lucide-react";
+import { Calendar, Check, Clock3, Stethoscope, X } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { getDealHealth } from "@/lib/commercial/deal-health";
 
 interface DealCardProps {
   deal: Deal;
@@ -28,6 +29,13 @@ function initials(name?: string, fallback?: string) {
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const contactLabel = deal.contact?.name || deal.contact?.phone || "No contact";
   const assigneeLabel = deal.assignee?.full_name || null;
+  const health = getDealHealth(deal);
+  const healthClass = {
+    healthy: "bg-emerald-500/10 text-emerald-500",
+    due_soon: "bg-amber-500/10 text-amber-500",
+    overdue: "bg-red-500/10 text-red-500",
+    missing_action: "bg-red-500/10 text-red-500",
+  }[health.state];
 
   return (
     <button
@@ -77,6 +85,20 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         </span>
         <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
       </div>
+
+      {deal.service_name && (
+        <div className="mt-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Stethoscope className="h-3 w-3" />
+          <span className="truncate">{deal.service_name}</span>
+        </div>
+      )}
+
+      {deal.status === "open" && (
+        <div className={`mt-2 inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-semibold ${healthClass}`}>
+          <Clock3 className="h-3 w-3" />
+          {health.label}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center justify-between">
         <span className="text-sm font-bold text-primary">

@@ -367,10 +367,26 @@ export interface PipelineStage {
   name: string;
   position: number;
   color: string;
+  entry_criteria?: string | null;
+  exit_criteria?: string | null;
+  sla_hours?: number | null;
+  probability?: number | null;
   created_at: string;
 }
 
 export type DealStatus = 'open' | 'won' | 'lost';
+export type LeadIntent = 'unknown' | 'low' | 'medium' | 'high';
+export type AppointmentStatus =
+  | 'not_scheduled'
+  | 'scheduled'
+  | 'confirmed'
+  | 'completed'
+  | 'no_show'
+  | 'cancelled'
+  | 'rescheduled';
+export type ForecastCategory = 'unclassified' | 'commit' | 'best_case' | 'stretch';
+export type ConsentStatus = 'unknown' | 'granted' | 'revoked' | 'not_required';
+export type HandoffStatus = 'not_started' | 'pending' | 'complete' | 'blocked';
 
 export interface Deal {
   id: string;
@@ -389,6 +405,30 @@ export interface Deal {
   currency?: string;
   notes?: string;
   expected_close_date?: string;
+  service_name?: string | null;
+  unit_name?: string | null;
+  professional_name?: string | null;
+  source_channel?: string | null;
+  campaign_name?: string | null;
+  lead_intent?: LeadIntent;
+  appointment_at?: string | null;
+  appointment_status?: AppointmentStatus;
+  forecast_category?: ForecastCategory;
+  next_action?: string | null;
+  next_action_at?: string | null;
+  next_action_channel?: string | null;
+  objection_code?: string | null;
+  loss_reason?: string | null;
+  recycle_at?: string | null;
+  consent_status?: ConsentStatus;
+  consent_source?: string | null;
+  consent_recorded_at?: string | null;
+  handoff_status?: HandoffStatus;
+  handoff_notes?: string | null;
+  plan_presented_at?: string | null;
+  won_at?: string | null;
+  lost_at?: string | null;
+  last_stage_changed_at?: string;
   status?: DealStatus;
   created_at: string;
   updated_at?: string;
@@ -549,6 +589,11 @@ export interface CreateDealStepConfig {
   stage_id: string;
   title: string;
   value?: number;
+  service_name?: string;
+  source_channel?: string;
+  next_action?: string;
+  /** ISO timestamp or an interpolated value supplied by a webhook/AI extraction. */
+  next_action_at?: string;
 }
 
 export interface WaitStepConfig {
