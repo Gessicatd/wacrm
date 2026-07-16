@@ -1187,6 +1187,35 @@ function TimeBasedConfig({
         </p>
       </div>
 
+      {/* Timezone */}
+      <div>
+        <label className="mb-1 block text-xs font-medium text-muted-foreground">
+          Timezone
+        </label>
+        <select
+          value={(config.timezone as string) ?? ''}
+          onChange={(e) => onChange({ ...config, timezone: e.target.value || undefined })}
+          className={SELECT_CLASS}
+        >
+          <option value="">UTC (server time)</option>
+          <option value="America/Sao_Paulo">America/Sao_Paulo (Brasília)</option>
+          <option value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires</option>
+          <option value="America/Mexico_City">America/Mexico_City</option>
+          <option value="America/New_York">America/New_York (Eastern)</option>
+          <option value="America/Los_Angeles">America/Los_Angeles (Pacific)</option>
+          <option value="Europe/London">Europe/London</option>
+          <option value="Europe/Paris">Europe/Paris</option>
+          <option value="Europe/Lisbon">Europe/Lisbon</option>
+          <option value="Asia/Dubai">Asia/Dubai</option>
+          <option value="Asia/Tokyo">Asia/Tokyo</option>
+          <option value="Australia/Sydney">Australia/Sydney</option>
+        </select>
+        <p className="mt-1 text-[11px] text-muted-foreground">
+          The schedule above is interpreted as wall-clock time in this timezone.
+          Leave empty to use UTC.
+        </p>
+      </div>
+
       {/* Target mode */}
       <div>
         <label className="mb-1 block text-xs font-medium text-muted-foreground">

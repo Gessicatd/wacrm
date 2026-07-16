@@ -93,7 +93,9 @@ export async function GET(request: Request) {
     } else {
       now = new Date()
     }
-    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+    const currentMinutes = now.getUTCHours() * 60 + now.getUTCMinutes()
+
+    // Log timezone-aware time for each automation in the loop.
 
     const { data: automations, error: tbErr } = await admin
       .from('automations')
@@ -126,14 +128,35 @@ export async function GET(request: Request) {
         }
 
         const scheduledMinutes = parsed.hours * 60 + parsed.minutes
-        const diff = Math.abs(currentMinutes - scheduledMinutes)
+
+        // If a timezone is configured, resolve the local time in that
+        // timezone instead of using raw UTC. The schedule is interpreted
+        // as wall-clock time in the given timezone.
+        let effectiveMinutes: number
+        if (cfg.timezone) {
+          const tz = getCurrentTimeInTimezone(now, cfg.timezone)
+          if (tz) {
+            effectiveMinutes = tz.hours * 60 + tz.minutes
+            console.info('[cron] timezone', cfg.timezone, '→ local time',
+              `${String(tz.hours).padStart(2, '0')}:${String(tz.minutes).padStart(2, '0')}`)
+          } else {
+            // Unrecognised timezone — fall back to UTC.
+            effectiveMinutes = currentMinutes
+          }
+        } else {
+          effectiveMinutes = currentMinutes
+        }
+
+        const diff = Math.abs(effectiveMinutes - scheduledMinutes)
         if (diff > 6) {
           console.info('[cron] skip', autoName, '— schedule', cfg.schedule,
+            cfg.timezone ? `(${cfg.timezone})` : '(UTC)',
             `(diff ${diff} min > 6 min window)`)
           continue
         }
 
         console.info('[cron] matched', autoName, '— schedule', cfg.schedule,
+          cfg.timezone ? `(${cfg.timezone})` : '(UTC)',
           `(diff ${diff} min, within window)`)
 
         // Dedup: skip if already fired within the last 6 minutes.
@@ -201,4 +224,37 @@ function parseSchedule(raw: string): { hours: number; minutes: number } | null {
   const minutes = parseInt(match[2], 10)
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null
   return { hours, minutes }
+}
+
+/**
+ * Extract the current hour and minute in the given IANA timezone.
+ * Uses Intl.DateTimeFormat.formatToParts — works in all modern
+ * JS runtimes (Node 18+, Edge, etc.) without external deps.
+ *
+ * Returns null if the timezone string is not recognised.
+ */
+function getCurrentTimeInTimezone(
+  now: Date,
+  tz: string,
+): { hours: number; minutes: number } | null {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(now)
+
+    const hourPart = parts.find((p) => p.type === 'hour')
+    const minutePart = parts.find((p) => p.type === 'minute')
+    if (!hourPart || !minutePart) return null
+
+    return {
+      hours: parseInt(hourPart.value, 10),
+      minutes: parseInt(minutePart.value, 10),
+    }
+  } catch {
+    // Intl.DateTimeFormat throws RangeError for invalid timezone.
+    return null
+  }
 }
