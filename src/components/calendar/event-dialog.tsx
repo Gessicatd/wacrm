@@ -14,9 +14,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import type { CalendarEvent, Contact } from '@/types';
+import type { CalendarEvent } from '@/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+
+import { createClient } from '@/lib/supabase/client';
+import { useAuth } from '@/hooks/use-auth';
 
 interface EventDialogProps {
   open: boolean;
@@ -25,7 +28,6 @@ interface EventDialogProps {
   onDelete?: () => Promise<void>;
   event?: CalendarEvent | null;
   defaultDate?: Date;
-  contacts?: Contact[];
 }
 
 export interface EventFormData {
@@ -58,6 +60,7 @@ export function EventDialog({
   event,
   defaultDate,
 }: EventDialogProps) {
+  const { accountId } = useAuth();
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [title, setTitle] = useState('');
@@ -95,12 +98,21 @@ export function EventDialog({
       setColor(EVENT_COLORS[0]);
     }
 
-    fetch('/api/v1/contacts?limit=200')
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.data?.length) {
+    if (!accountId) return;
+    const supabase = createClient();
+    supabase
+      .from('contacts')
+      .select('id, name, phone')
+      .eq('account_id', accountId)
+      .order('name', { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        if (data?.length) {
           setContacts(
-            json.data.map((c: Contact) => ({ id: c.id, name: c.name ?? c.phone ?? 'Unknown' }))
+            data.map((c: { id: string; name?: string; phone?: string }) => ({
+              id: c.id,
+              name: c.name ?? c.phone ?? 'Unknown',
+            }))
           );
         }
       })
@@ -162,7 +174,7 @@ export function EventDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 mt-2">
+        <div className="space-y-4 mt-2 max-h-[60vh] overflow-y-auto pr-1">
           <div className="space-y-1.5">
             <Label htmlFor="event-title">Title</Label>
             <Input
