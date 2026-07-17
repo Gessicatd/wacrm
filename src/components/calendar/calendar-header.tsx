@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
-type CalendarViewMode = 'month' | 'week' | 'day';
+export type CalendarViewMode = 'month' | 'week' | 'day';
 
 export interface CalendarHeaderProps {
   currentDate: Date;
