@@ -1,4 +1,5 @@
 import {
+  Calendar,
   Camera,
   Coins,
   FileText,
@@ -30,6 +31,7 @@ export const SETTINGS_SECTIONS = [
   'whatsapp',
   'instagram',
   'ryzeapi',
+  'calendar',
   'templates',
   'fields',
   'deals',
@@ -58,6 +60,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
   instagram: { id: 'instagram', label: 'Instagram', icon: Camera, group: 'workspace' },
   ryzeapi: { id: 'ryzeapi', label: 'RyzeAPI', icon: PlugZap, group: 'workspace' },
+  calendar: { id: 'calendar', label: 'Google Calendar', icon: Calendar, group: 'workspace' },
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
   fields: { id: 'fields', label: 'Fields & tags', icon: Tags, group: 'workspace' },
   deals: { id: 'deals', label: 'Deals & currency', icon: Coins, group: 'workspace' },

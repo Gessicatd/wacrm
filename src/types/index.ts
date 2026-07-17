@@ -691,3 +691,78 @@ export interface AutomationLog {
   created_at: string;
   contact?: Contact;
 }
+
+// ============================================================
+// Google Calendar (migrations 046 + 047)
+// ============================================================
+
+export type CalendarSyncStatus =
+  | 'synced'
+  | 'pending_create'
+  | 'pending_update'
+  | 'pending_delete'
+  | 'conflict';
+
+export type CalendarEventStatus = 'scheduled' | 'cancelled' | 'tentative';
+
+export interface CalendarConnection {
+  id: string;
+  account_id: string;
+  created_by: string | null;
+  google_email: string;
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: string;
+  calendar_id: string;
+  calendar_name: string | null;
+  sync_enabled: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarConnectionPublic {
+  id: string;
+  google_email: string;
+  calendar_id: string;
+  calendar_name: string | null;
+  sync_enabled: boolean;
+  is_active: boolean;
+  token_expires_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CalendarEventAttendee {
+  email: string;
+  name?: string;
+  responseStatus?: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  account_id: string;
+  google_event_id: string | null;
+  google_calendar_id: string | null;
+  title: string;
+  description: string | null;
+  location: string | null;
+  start_at: string;
+  end_at: string;
+  is_all_day: boolean;
+  timezone: string | null;
+  status: CalendarEventStatus;
+  contact_id: string | null;
+  deal_id: string | null;
+  conference_link: string | null;
+  attendees_json: CalendarEventAttendee[];
+  recurrence_rule: string | null;
+  color: string | null;
+  sync_status: CalendarSyncStatus;
+  last_synced_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  contact?: Contact;
+  deal?: Deal;
+}
