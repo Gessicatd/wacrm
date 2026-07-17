@@ -74,6 +74,8 @@ export function CalendarConfig() {
     if (!connection || !accountId) return;
     setSaving(true);
     try {
+      await supabase.from('calendar_events').delete().eq('account_id', accountId);
+
       const { error } = await supabase
         .from('calendar_connections')
         .update({ is_active: false, updated_at: new Date().toISOString() })

@@ -167,6 +167,8 @@ export async function disconnectCalendar(
     // Token may already be invalid; proceed with disconnect.
   }
 
+  await db.from('calendar_events').delete().eq('account_id', accountId);
+
   await db
     .from('calendar_connections')
     .update({ is_active: false, updated_at: new Date().toISOString() })
