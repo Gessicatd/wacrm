@@ -98,15 +98,16 @@ export function EventDialog({
       setColor(EVENT_COLORS[0]);
     }
 
-    if (!accountId) return;
-    const supabase = createClient();
-    supabase
-      .from('contacts')
-      .select('id, name, phone')
-      .eq('account_id', accountId)
-      .order('name', { ascending: true })
-      .limit(200)
-      .then(({ data }) => {
+    const fetchContacts = async () => {
+      if (!accountId) return;
+      const supabase = createClient();
+      try {
+        const { data } = await supabase
+          .from('contacts')
+          .select('id, name, phone')
+          .eq('account_id', accountId)
+          .order('name', { ascending: true })
+          .limit(200);
         if (data?.length) {
           setContacts(
             data.map((c: { id: string; name?: string; phone?: string }) => ({
@@ -115,8 +116,12 @@ export function EventDialog({
             }))
           );
         }
-      })
-      .catch(() => {});
+      } catch {
+        // silently ignore
+      }
+    };
+
+    fetchContacts();
   }, [open, event, defaultDate]);
 
   const handleSave = useCallback(async () => {
