@@ -61,7 +61,6 @@ export async function syncCreateEvent(
       location: eventData.location ?? undefined,
       start,
       end,
-      colorId: eventData.color ?? undefined,
     },
   });
 
