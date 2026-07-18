@@ -93,61 +93,46 @@ export default function CalendarPage() {
       if (!accountId) throw new Error('Not authenticated');
 
       if (selectedEvent) {
-        const { error: updateError } = await supabase
-          .from('calendar_events')
-          .update({
-            title: data.title,
-            description: data.description || null,
-            location: data.location || null,
-            start_at: data.start_at,
-            end_at: data.end_at,
-            is_all_day: data.is_all_day,
-            contact_id: data.contact_id || null,
-            color: data.color,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', selectedEvent.id)
-          .eq('account_id', accountId);
-
-        if (updateError) throw updateError;
+        const res = await fetch(`/api/calendar/events/${selectedEvent.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) {
+          const json = await res.json();
+          throw new Error(json?.error ?? 'Failed to update event');
+        }
         toast.success('Event updated');
       } else {
-        const { error: insertError } = await supabase
-          .from('calendar_events')
-          .insert({
-            account_id: accountId,
-            title: data.title,
-            description: data.description || null,
-            location: data.location || null,
-            start_at: data.start_at,
-            end_at: data.end_at,
-            is_all_day: data.is_all_day,
-            contact_id: data.contact_id || null,
-            color: data.color,
-            sync_status: 'synced',
-          });
-
-        if (insertError) throw insertError;
+        const res = await fetch('/api/calendar/events', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+        if (!res.ok) {
+          const json = await res.json();
+          throw new Error(json?.error ?? 'Failed to create event');
+        }
         toast.success('Event created');
       }
 
       fetchEvents();
     },
-    [accountId, selectedEvent, supabase, fetchEvents]
+    [accountId, selectedEvent, fetchEvents]
   );
 
   const handleDelete = useCallback(async () => {
     if (!selectedEvent || !accountId) return;
-    const { error: deleteError } = await supabase
-      .from('calendar_events')
-      .delete()
-      .eq('id', selectedEvent.id)
-      .eq('account_id', accountId);
-
-    if (deleteError) throw deleteError;
+    const res = await fetch(`/api/calendar/events/${selectedEvent.id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const json = await res.json();
+      throw new Error(json?.error ?? 'Failed to delete event');
+    }
     toast.success('Event deleted');
     fetchEvents();
-  }, [selectedEvent, accountId, supabase, fetchEvents]);
+  }, [selectedEvent, accountId, fetchEvents]);
 
   return (
     <div>
