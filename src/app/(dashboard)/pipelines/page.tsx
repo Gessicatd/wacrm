@@ -38,11 +38,14 @@ import { GatedButton } from "@/components/ui/gated-button";
 
 // Spec-defined seed — name and color per the product spec.
 const SPEC_DEFAULT_STAGES = [
-  { name: "New Lead", color: "#3b82f6", position: 0 }, // blue
-  { name: "Qualified", color: "#eab308", position: 1 }, // yellow
-  { name: "Proposal Sent", color: "#f97316", position: 2 }, // orange
-  { name: "Negotiation", color: "#8b5cf6", position: 3 }, // purple
-  { name: "Won", color: "#22c55e", position: 4 }, // green
+  { name: "Novo interessado", color: "#3b82f6", position: 0, sla_hours: 2, probability: 5, exit_criteria: "Contato humano iniciado ou desqualificação justificada" },
+  { name: "Pré-qualificação", color: "#06b6d4", position: 1, sla_hours: 48, probability: 15, exit_criteria: "Objetivo, logística, expectativa e aderência comercial compreendidos" },
+  { name: "Avaliação agendada", color: "#eab308", position: 2, sla_hours: 168, probability: 30, exit_criteria: "Data aceita, orientações enviadas e confirmação solicitada" },
+  { name: "Avaliação confirmada", color: "#f59e0b", position: 3, sla_hours: 72, probability: 40, exit_criteria: "Confirmação explícita registrada" },
+  { name: "Avaliação realizada", color: "#f97316", position: 4, sla_hours: 24, probability: 55, exit_criteria: "Comparecimento registrado e encaminhamento profissional definido" },
+  { name: "Plano apresentado", color: "#a855f7", position: 5, sla_hours: 72, probability: 70, exit_criteria: "Plano e investimento compreendidos; próximo passo bilateral agendado" },
+  { name: "Em decisão", color: "#8b5cf6", position: 6, sla_hours: 168, probability: 85, exit_criteria: "Aceite, perda explícita ou retomada futura com data" },
+  { name: "Contratado", color: "#22c55e", position: 7, sla_hours: 48, probability: 100, exit_criteria: "Pagamento/documentos e handoff concluídos" },
 ];
 
 export default function PipelinesPage() {
@@ -120,7 +123,7 @@ export default function PipelinesPage() {
 
     const { data: pipeline, error } = await supabase
       .from("pipelines")
-      .insert({ user_id: user.id, account_id: accountId, name: "Sales Pipeline" })
+      .insert({ user_id: user.id, account_id: accountId, name: "Jornada Comercial High Ticket" })
       .select()
       .single();
 
@@ -134,6 +137,9 @@ export default function PipelinesPage() {
       name: s.name,
       color: s.color,
       position: s.position,
+      sla_hours: s.sla_hours,
+      probability: s.probability,
+      exit_criteria: s.exit_criteria,
     }));
     await supabase.from("pipeline_stages").insert(stagesPayload);
 
@@ -284,6 +290,9 @@ export default function PipelinesPage() {
       name: s.name,
       color: s.color,
       position: s.position,
+      sla_hours: s.sla_hours,
+      probability: s.probability,
+      exit_criteria: s.exit_criteria,
     }));
     await supabase.from("pipeline_stages").insert(stagesPayload);
 
