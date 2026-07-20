@@ -22,6 +22,7 @@
 // ============================================================
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
@@ -284,12 +285,15 @@ export function MembersTab() {
         title="Team members"
         description="People with access to this account. Roles control what each teammate can do."
         action={
-          <RequireRole min="admin">
-            <Button onClick={() => setInviteOpen(true)}>
-              <Plus className="size-4" />
-              Invite member
-            </Button>
-          </RequireRole>
+          <div className="flex gap-2">
+            <RequireRole min="admin">
+              <Button variant="outline" render={<Link href="/settings/permissions" />}>Permissões</Button>
+              <Button onClick={() => setInviteOpen(true)}>
+                <Plus className="size-4" />
+                Invite member
+              </Button>
+            </RequireRole>
+          </div>
         }
       />
 
