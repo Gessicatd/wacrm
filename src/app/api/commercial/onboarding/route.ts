@@ -56,6 +56,11 @@ export async function POST(request: Request) {
       business_name: text(answers.businessName),
       specialty: text(answers.specialty),
       primary_offer: text(answers.mainOffer),
+      ideal_customer_profile: {
+        description: text(answers.idealCustomer),
+        awareness_stage: text(answers.awareness),
+        differentiator: text(answers.differentiator),
+      },
       monthly_capacity: integer(answers.capacity),
       target_90_days: text(answers.goal),
       automation_boundaries: Array.isArray(answers.automationBoundary) ? answers.automationBoundary : [],
@@ -63,6 +68,10 @@ export async function POST(request: Request) {
         ticket_band: answers.ticket ?? null,
         response_time: answers.responseTime ?? null,
         sales_path: answers.salesPath ?? null,
+        research_maturity: answers.research ?? null,
+        funnel_type: answers.funnelType ?? null,
+        call_process: answers.callProcess ?? null,
+        monthly_leads: integer(answers.monthlyLeads),
         followup: answers.followup ?? null,
         consent: answers.consent ?? null,
       },
@@ -93,4 +102,3 @@ function integer(value: unknown) {
   const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null
 }
-
