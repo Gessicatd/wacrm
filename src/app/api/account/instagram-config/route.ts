@@ -12,7 +12,12 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from "next/server";
 import { requireRole, toErrorResponse } from "@/lib/auth/account";
 import { encrypt, decrypt } from "@/lib/whatsapp/encryption";
-import { verifyIgAccount, subscribeIgApp } from "@/lib/instagram/meta-api";
+import {
+  verifyIgAccount,
+  subscribeIgApp,
+  exchangeToken,
+  debugToken,
+} from "@/lib/instagram/meta-api";
 
 let _adminClient: any = null
 function supabaseAdmin() {
@@ -31,7 +36,7 @@ export async function GET() {
 
     const { data, error } = await ctx.supabase
       .from("instagram_config")
-      .select("instagram_business_account_id, business_name, status, connected_at, verify_token, registered_at, subscribed_apps_at, last_registration_error")
+      .select("*")
       .eq("account_id", ctx.accountId)
       .maybeSingle();
 
@@ -43,6 +48,8 @@ export async function GET() {
       );
     }
 
+    const hasMetaAppId = Boolean(data?.meta_app_id);
+
     return NextResponse.json({
       instagram_business_account_id: data?.instagram_business_account_id || null,
       business_name: data?.business_name || null,
@@ -52,6 +59,13 @@ export async function GET() {
       registered_at: data?.registered_at || null,
       subscribed_apps_at: data?.subscribed_apps_at || null,
       last_registration_error: data?.last_registration_error || null,
+      meta_app_id: hasMetaAppId
+        ? `****${(data!.meta_app_id as string).slice(-4)}`
+        : null,
+      has_app_credentials: hasMetaAppId,
+      token_expires_at: data?.token_expires_at || null,
+      token_refreshed_at: data?.token_refreshed_at || null,
+      last_refresh_error: data?.last_refresh_error || null,
       // access_token is never returned to the client.
       access_token: data?.instagram_business_account_id ? "••••••••" : null,
     });
@@ -69,6 +83,8 @@ export async function PUT(request: Request) {
       instagram_business_account_id?: string | null;
       verify_token?: string | null;
       business_name?: string | null;
+      meta_app_id?: string | null;
+      meta_app_secret?: string | null;
     } | null;
 
     if (!body) {
@@ -82,16 +98,59 @@ export async function PUT(request: Request) {
       );
     }
 
-    // Resolve token: if provided, verify and encrypt; otherwise reuse existing.
+    // Resolve token: if provided, optionally exchange for long-lived; otherwise reuse existing.
     let encryptedToken: string | undefined;
     let businessName = body.business_name || null;
+    let tokenExpiresAt: string | null = null;
+    let refreshedAt: string | null = null;
 
     if (body.access_token) {
+      let rawToken = body.access_token;
+
+      // If the user also provided Meta App credentials, attempt to exchange
+      // short-lived → long-lived up front. The exchange is best-effort —
+      // if it fails we still keep the original token (e.g., if it's already
+      // a long-lived Page token that can't be exchanged).
+      if (body.meta_app_id && body.meta_app_secret) {
+        try {
+          const exchanged = await exchangeToken(
+            rawToken,
+            body.meta_app_id,
+            body.meta_app_secret,
+          );
+          rawToken = exchanged.accessToken;
+          tokenExpiresAt = new Date(
+            Date.now() + exchanged.expiresInSeconds * 1000,
+          ).toISOString();
+          refreshedAt = new Date().toISOString();
+          console.info("[PUT /api/account/instagram-config] exchanged short-lived → long-lived token");
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "Unknown error";
+          console.warn("[PUT /api/account/instagram-config] token exchange failed (keeping original):", msg);
+        }
+      }
+
+      // If we didn't get expires_at from exchange, try debugToken as fallback.
+      // debugToken needs app credentials for auth — skip if none provided.
+      if (!tokenExpiresAt && body.meta_app_id && body.meta_app_secret) {
+        try {
+          const debug = await debugToken(rawToken, body.meta_app_id, body.meta_app_secret);
+          if (debug.expiresAt) {
+            tokenExpiresAt = new Date(debug.expiresAt * 1000).toISOString();
+            console.info("[PUT /api/account/instagram-config] resolved token expiry via debugToken");
+          } else {
+            console.info("[PUT /api/account/instagram-config] token has no expiry (likely non-expiring Page token)");
+          }
+        } catch (err) {
+          console.warn("[PUT /api/account/instagram-config] debugToken failed:", (err as Error).message);
+        }
+      }
+
       // Verify the credentials by fetching the Instagram Business Account info.
       try {
         const info = await verifyIgAccount({
           igUserId: body.instagram_business_account_id,
-          accessToken: body.access_token,
+          accessToken: rawToken,
         });
         if (info.name) businessName = info.name;
         if (!businessName && info.username) businessName = info.username;
@@ -103,12 +162,12 @@ export async function PUT(request: Request) {
         );
       }
 
-      encryptedToken = encrypt(body.access_token);
+      encryptedToken = encrypt(rawToken);
     } else {
       // Reuse existing encrypted token.
       const { data: existing } = await ctx.supabase
         .from("instagram_config")
-        .select("access_token")
+        .select("access_token, token_expires_at")
         .eq("account_id", ctx.accountId)
         .maybeSingle();
 
@@ -119,20 +178,52 @@ export async function PUT(request: Request) {
         );
       }
       encryptedToken = existing.access_token;
+      tokenExpiresAt = (existing as any).token_expires_at ?? null;
+    }
+
+    // Encrypt meta_app_secret if provided.
+    let encryptedAppSecret: string | undefined;
+    if (body.meta_app_secret !== undefined) {
+      if (body.meta_app_secret && body.meta_app_secret.trim()) {
+        encryptedAppSecret = encrypt(body.meta_app_secret);
+      }
+    } else {
+      // Reuse existing. Only fetch if not already fetched above.
+      const { data: existing } = await ctx.supabase
+        .from("instagram_config")
+        .select("*")
+        .eq("account_id", ctx.accountId)
+        .maybeSingle();
+      encryptedAppSecret = (existing as any)?.meta_app_secret ?? undefined;
+    }
+
+    // Build the upsert payload.
+    const upsertPayload: Record<string, unknown> = {
+      account_id: ctx.accountId,
+      user_id: ctx.userId,
+      access_token: encryptedToken,
+      instagram_business_account_id: body.instagram_business_account_id,
+      verify_token: body.verify_token ? encrypt(body.verify_token) : null,
+      business_name: businessName,
+      status: "connected",
+      connected_at: new Date().toISOString(),
+    };
+
+    if (body.meta_app_id !== undefined) {
+      upsertPayload.meta_app_id = body.meta_app_id || null;
+    }
+    if (encryptedAppSecret !== undefined) {
+      upsertPayload.meta_app_secret = encryptedAppSecret || null;
+    }
+    if (tokenExpiresAt !== null || refreshedAt !== null) {
+      upsertPayload.token_expires_at = tokenExpiresAt;
+      upsertPayload.token_refreshed_at = refreshedAt;
+      upsertPayload.last_refresh_error = null;
     }
 
     // Save the config first.
     const { error: upsertError } = await ctx.supabase.from("instagram_config").upsert(
-      {
-        account_id: ctx.accountId,
-        user_id: ctx.userId,
-        access_token: encryptedToken,
-        instagram_business_account_id: body.instagram_business_account_id,
-        verify_token: body.verify_token ? encrypt(body.verify_token) : null,
-        business_name: businessName,
-        status: "connected",
-        connected_at: new Date().toISOString(),
-      },
+      upsertPayload,
       { onConflict: "account_id" },
     );
 
@@ -150,9 +241,7 @@ export async function PUT(request: Request) {
     let subscriptionError: string | null = null;
 
     try {
-      const rawToken = body.access_token
-        ? body.access_token
-        : await getDecryptedToken(ctx.accountId);
+      const rawToken = await getDecryptedToken(ctx.accountId);
 
       if (rawToken) {
         await subscribeIgApp(body.instagram_business_account_id, rawToken);

@@ -30,6 +30,128 @@ async function throwInstagramError(response: Response, fallback: string): Promis
   throw new Error(message)
 }
 
+const FACEBOOK_API_VERSION = 'v25.0'
+const FACEBOOK_API_BASE = `https://graph.facebook.com/${FACEBOOK_API_VERSION}`
+
+// ============================================================
+// Token exchange & debug
+// ============================================================
+
+export interface ExchangeTokenResult {
+  accessToken: string
+  expiresInSeconds: number
+  tokenType: string
+}
+
+export interface DebugTokenResult {
+  appId?: string
+  userId?: string
+  expiresAt: number | null
+  isValid: boolean
+  scopes: string[]
+  error?: { code: number; message: string; subcode?: number }
+}
+
+/**
+ * Exchange a short-lived or long-lived access token for a new long-lived
+ * token via Meta's /oauth/access_token endpoint.
+ *
+ * GET /oauth/access_token
+ *   ?grant_type=fb_exchange_token
+ *   &client_id={app_id}
+ *   &client_secret={app_secret}
+ *   &fb_exchange_token={current_token}
+ *
+ * Response: { access_token, token_type: "bearer", expires_in: 5184000 }
+ *
+ * Reference:
+ *   https://developers.facebook.com/docs/facebook-login/guides/access-tokens/get-long-lived
+ */
+export async function exchangeToken(
+  shortLivedToken: string,
+  appId: string,
+  appSecret: string,
+): Promise<ExchangeTokenResult> {
+  const params = new URLSearchParams({
+    grant_type: 'fb_exchange_token',
+    client_id: appId,
+    client_secret: appSecret,
+    fb_exchange_token: shortLivedToken,
+  })
+
+  const url = `${FACEBOOK_API_BASE}/oauth/access_token?${params.toString()}`
+
+  const response = await fetch(url, { method: 'GET' })
+
+  if (!response.ok) {
+    await throwInstagramError(response, `Token exchange failed: ${response.status}`)
+  }
+
+  const data = (await response.json()) as {
+    access_token: string
+    token_type: string
+    expires_in: number
+  }
+
+  return {
+    accessToken: data.access_token,
+    expiresInSeconds: data.expires_in,
+    tokenType: data.token_type,
+  }
+}
+
+/**
+ * Debug an access token via Meta's /debug_token endpoint.
+ *
+ * GET /debug_token?input_token={token}
+ *   The Authorization header must carry either:
+ *     - an app access token (app_id|app_secret), or
+ *     - a user access token belonging to a developer/admin of the app
+ *       that created the token being inspected.
+ *
+ * Self-inspection (using the same token as auth) is NOT supported by
+ * Meta — it fails with "Cannot parse access token". We always use the
+ * app-level token formed from appId + appSecret.
+ */
+export async function debugToken(
+  accessToken: string,
+  appId: string,
+  appSecret: string,
+): Promise<DebugTokenResult> {
+  const params = new URLSearchParams({ input_token: accessToken })
+  const url = `${FACEBOOK_API_BASE}/debug_token?${params.toString()}`
+
+  const appAccessToken = `${appId}|${appSecret}`
+
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${appAccessToken}` },
+  })
+
+  if (!response.ok) {
+    await throwInstagramError(response, `Token debug failed: ${response.status}`)
+  }
+
+  const { data } = (await response.json()) as {
+    data: {
+      app_id?: string
+      user_id?: string
+      expires_at?: number
+      is_valid?: boolean
+      scopes?: string[]
+      error?: { code: number; message: string; subcode?: number }
+    }
+  }
+
+  return {
+    appId: data.app_id,
+    userId: data.user_id,
+    expiresAt: data.expires_at ?? null,
+    isValid: data.is_valid ?? true,
+    scopes: data.scopes ?? [],
+    error: data.error,
+  }
+}
+
 // ============================================================
 // Send text message
 // ============================================================

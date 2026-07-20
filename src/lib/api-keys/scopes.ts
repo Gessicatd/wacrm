@@ -29,6 +29,8 @@ export const API_SCOPES = [
   'members:read',
   'media:read',
   'media:write',
+  'calendar:read',
+  'calendar:write',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -50,6 +52,8 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'members:read': 'List and read team members and their roles',
   'media:read': 'List and read media library assets and tags',
   'media:write': 'Upload and delete media library assets, create and delete tags',
+  'calendar:read': 'List and read calendar events and connection status',
+  'calendar:write': 'Create, update, and delete calendar events, manage Google Calendar connection',
 };
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */

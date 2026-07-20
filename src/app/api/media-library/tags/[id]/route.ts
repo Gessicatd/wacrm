@@ -3,7 +3,6 @@
 // ============================================================
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 import { getCurrentAccount } from '@/lib/auth/account';
 
 export async function DELETE(
@@ -11,8 +10,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { accountId } = await getCurrentAccount();
-    const supabase = await createClient();
+    const { accountId, supabase } = await getCurrentAccount();
     const { id } = await params;
 
     const { error } = await supabase

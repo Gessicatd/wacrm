@@ -45,6 +45,7 @@ import {
   type MediaKind as InstagramMediaKind,
 } from '@/lib/instagram/meta-api';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
+import { getRefreshedAccessToken } from '@/lib/instagram/token-refresh';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
   sanitizePhoneForMeta,
@@ -786,7 +787,7 @@ async function sendInstagramMessage(
   // Load Instagram config for the account.
   const { data: config, error: configError } = await db
     .from('instagram_config')
-    .select('access_token, instagram_business_account_id')
+    .select('*')
     .eq('account_id', accountId)
     .single();
 
@@ -798,7 +799,7 @@ async function sendInstagramMessage(
     );
   }
 
-  const accessToken = decrypt(config.access_token);
+  const accessToken = await getRefreshedAccessToken(config);
   const igUserId = config.instagram_business_account_id;
   const igRecipientId = contact.instagram_id;
 

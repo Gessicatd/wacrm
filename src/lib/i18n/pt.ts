@@ -13,6 +13,7 @@ const pt: TranslationDict = {
   'nav.settings': 'Configurações',
   'nav.apiDocs': 'API Docs',
   'nav.mediaLibrary': 'Biblioteca de Mídia',
+  'nav.calendar': 'Calendário',
 
   'role.owner': 'Proprietário',
   'role.admin': 'Administrador',

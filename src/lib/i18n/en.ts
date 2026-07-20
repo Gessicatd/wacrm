@@ -14,6 +14,7 @@ const en: TranslationDict = {
   'nav.settings': 'Settings',
   'nav.apiDocs': 'API Docs',
   'nav.mediaLibrary': 'Media Library',
+  'nav.calendar': 'Calendar',
 
   // Roles
   'role.owner': 'Owner',

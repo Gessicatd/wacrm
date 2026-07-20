@@ -1,34 +1,30 @@
-# wacrm — CRM Template for WhatsApp
+# wacrm — WhatsApp & Instagram CRM
 
-> Self-hostable CRM template for WhatsApp® — shared inbox, contacts,
-> sales pipelines, broadcasts, and no-code automations. Fork it, brand
-> it, host it.
+> Self-hosted WhatsApp & Instagram CRM — shared inbox, pipelines,
+> broadcasts, and no-code automations.
 
 
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
-[![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
 [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
 [![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
-[![Stars](https://img.shields.io/github/stars/ArnasDon/wacrm?style=social)](https://github.com/ArnasDon/wacrm/stargazers)
-
-The marketing site and self-host docs live in a separate repo:
-[ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)
-([wacrm.tech](https://wacrm.tech)). This repo is the product —
-clone or fork it to run your own CRM.
 
 ## What you get out of the box
 
-- **Shared inbox** on the official WhatsApp Business API — multiple
-  agents working one number, per-conversation assignment, status, and
-  notes.
+- **Shared inbox** on the official WhatsApp Business API and
+  Instagram Messaging API — multiple agents working one number/account,
+  per-conversation assignment, status, and notes.
 - **Contacts + tags + custom fields**, CSV import, deduplication.
 - **Sales pipelines** (Kanban) with deals linked to conversations.
 - **Broadcasts** with Meta-approved templates, delivery + read
   tracking, per-recipient variable substitution.
 - **No-code automations** — triggers on inbound messages, new
-  contacts, keywords, or schedule; conditional branches, waits,
-  tags, webhooks. Visual builder.
+  contacts, keywords, time-based schedules, or tag/pipeline events;
+  conditional branches, waits, tags, webhooks. Visual builder.
+- **Time-based automations with targeting** — send scheduled messages
+  to contacts filtered by tags, pipeline stage, or deal status.
+  Cron-driven dispatch with dedup; optional `?now=HH:mm` for manual
+  testing.
 - **AI reply assistant** — bring your own OpenAI or Anthropic key
   (stored encrypted; no per-seat AI fee, your data stays yours).
   One-click AI-drafted replies in the inbox, plus an optional
@@ -44,12 +40,13 @@ clone or fork it to run your own CRM.
   build your own automations on top of your CRM. See
   [docs/public-api.md](./docs/public-api.md).
 
-## Why fork this?
+## Why self-host?
 
-This is a **template**, not a product. Forking means you get:
+Self-hosting means total control:
 
 - **Full ownership** — your code, your Supabase project, your domain,
-  your data. No SaaS lock-in, no seat pricing, no trust dance.
+  your data. No SaaS lock-in, no seat pricing, no sharing data with
+  third parties.
 - **Full customisation** — add the fields your team needs, remove the
   modules you don't, redesign anything. The stack is boring on
   purpose (Next.js + Supabase + Tailwind) so the learning curve is
@@ -62,14 +59,13 @@ This is a **template**, not a product. Forking means you get:
   on every table, HMAC-verified webhooks, CSP, rate limiting, CI
   typecheck/build on every PR.
 
-Not a framework. Not an SDK. A concrete, working CRM you can stand up
+A complete, production-ready CRM you can stand up
 in an afternoon and make yours.
 
 ## Quick start
 
 ```bash
-# Fork on GitHub first: https://github.com/ArnasDon/wacrm → Fork
-git clone https://github.com/<your-username>/wacrm.git
+git clone https://github.com/douglaswbc/wacrm.git
 cd wacrm
 npm install
 cp .env.local.example .env.local   # fill in Supabase + Meta creds
@@ -96,7 +92,7 @@ Swarm mode with Traefik as reverse proxy handles SSL automatically.
 ```bash
 # Clone the repository
 cd /opt
-git clone https://github.com/<your-username>/wacrm
+git clone https://github.com/douglaswbc/wacrm
 cd wacrm
 
 # Create environment file — see .env.local.example for all vars
@@ -120,7 +116,9 @@ Required variables — configure in `.env.local` before building:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase service_role key (bypasses RLS) |
 | `ENCRYPTION_KEY` | 64-char hex for token encryption (`crypto.randomBytes(32).toString('hex')`) |
-| `META_APP_SECRET` | Meta App Secret for webhook verification |
+| `AUTOMATION_CRON_SECRET` | Shared secret protecting `/api/automations/cron` (required for wait steps and time-based triggers) |
+| `META_APP_SECRET` | Meta App Secret for WhatsApp webhook verification |
+| `INSTAGRAM_APP_SECRET` | Meta App Secret for Instagram webhook verification (separate app) |
 | `NEXT_PUBLIC_SITE_URL` | Public URL of your CRM (`https://crm.seudominio.com`) |
 
 ### Supabase Auth URL configuration
@@ -157,37 +155,38 @@ docker build -t wacrm:latest .
 docker stack deploy -c wacrm.yaml wacrm
 ```
 
-## Documentation
+### Automation cron
 
-Full self-host documentation — Supabase migrations, WhatsApp Business
-API config, and production deploy — lives at
-**[wacrm.tech/docs](https://wacrm.tech/docs)**
-(source: [ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)).
+Time-based automations and wait steps depend on the cron endpoint being
+called every ~5 minutes. Set `AUTOMATION_CRON_SECRET` in `.env.local`,
+install cron on the VPS if not already present, then register the job:
 
-Key pages:
-- [Getting started](https://wacrm.tech/docs/getting-started)
-- [Supabase setup](https://wacrm.tech/docs/supabase-setup)
-- [WhatsApp setup](https://wacrm.tech/docs/whatsapp-setup)
-- [Environment variables](https://wacrm.tech/docs/environment-variables)
-- [Deploy on Docker Swarm](#-deploy-on-docker-swarm)
-- [Architecture](https://wacrm.tech/docs/architecture)
-- [Troubleshooting](https://wacrm.tech/docs/troubleshooting)
+```bash
+# Install cron if needed (Debian/Ubuntu)
+apt update && apt install -y cron
+systemctl enable --now cron
+
+# Register the job
+echo "*/5 * * * * curl -s -H 'x-cron-secret: YOUR_SECRET' https://your-domain.com/api/automations/cron >> /var/log/wacrm-cron.log 2>&1" | crontab -
+```
+
+Use `?now=HH:mm` for manual testing (bypasses schedule check and dedup).
 
 ## Stack
 
 - **App** — Next.js 16 (App Router), React 19, TypeScript, Tailwind v4.
 - **Data** — Supabase (Postgres + Auth + Storage + RLS).
-- **WhatsApp** — Meta Cloud API (official WhatsApp Business API).
+- **WhatsApp** — Meta Cloud API (official WhatsApp Business API) and
+  RyzeAPI (self-hosted WhatsApp gateway).
+- **Instagram** — Instagram Graph API for messaging, comments, and
+  post-based automations. Supports long-lived token auto-refresh.
 
 ## Contributing
 
-This is a template, not a collaborative product — the expected flow is
-fork → customise → deploy, **not** upstream contribution. Bug reports
-and security issues are welcome; feature PRs often belong in your fork
-rather than here. Details in
+Bug reports and security issues are welcome. See
 [`CONTRIBUTING.md`](./CONTRIBUTING.md) and
 [`.github/SECURITY.md`](./.github/SECURITY.md).
 
 ## License
 
-[MIT](./LICENSE). Fork it, brand it, host it.
+[MIT](./LICENSE)

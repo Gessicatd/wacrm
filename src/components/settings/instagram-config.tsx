@@ -29,6 +29,56 @@ import {
 
 const MASKED_TOKEN = '••••••••••••••••';
 
+function TokenStatus({
+  expiresAt,
+  refreshedAt,
+  refreshError,
+}: {
+  expiresAt: string;
+  refreshedAt: string | null;
+  refreshError: string | null;
+}) {
+  const expires = new Date(expiresAt);
+  const now = Date.now();
+  const diffMs = expires.getTime() - now;
+  const daysLeft = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+
+  let color: string;
+  if (daysLeft <= 0) color = 'text-red-400';
+  else if (daysLeft <= 7) color = 'text-amber-400';
+  else color = 'text-emerald-400';
+
+  if (daysLeft <= 0) {
+    return (
+      <div className="mt-2 rounded border border-red-800/50 bg-red-950/30 px-2.5 py-1.5 text-xs">
+        <span className="text-red-400 font-medium">Token expired</span>
+        <span className="text-muted-foreground ml-1">
+          — Please re-enter credentials to reconnect.
+        </span>
+        {refreshError && (
+          <p className="text-red-300 mt-0.5">Last refresh error: {refreshError}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 rounded border border-border bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+      <span className={color + ' font-medium'}>
+        {daysLeft} {daysLeft === 1 ? 'day' : 'days'} until expiry
+      </span>
+      {refreshedAt && (
+        <span className="ml-1">
+          (last refreshed {new Date(refreshedAt).toLocaleDateString()})
+        </span>
+      )}
+      {refreshError && (
+        <p className="text-amber-300 mt-0.5">Last refresh attempt failed: {refreshError}</p>
+      )}
+    </div>
+  );
+}
+
 type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
 
 interface RegistrationProbe {
@@ -60,6 +110,16 @@ export function InstagramConfig() {
   const [registeredAt, setRegisteredAt] = useState<string | null>(null);
   const [lastRegistrationError, setLastRegistrationError] = useState<string | null>(null);
 
+  const [metaAppId, setMetaAppId] = useState('');
+  const [metaAppSecret, setMetaAppSecret] = useState('');
+  const [showAppSecret, setShowAppSecret] = useState(false);
+  const [appIdEdited, setAppIdEdited] = useState(false);
+  const [secretEdited, setSecretEdited] = useState(false);
+  const [hasAppCredentials, setHasAppCredentials] = useState(false);
+  const [tokenExpiresAt, setTokenExpiresAt] = useState<string | null>(null);
+  const [tokenRefreshedAt, setTokenRefreshedAt] = useState<string | null>(null);
+  const [lastRefreshError, setLastRefreshError] = useState<string | null>(null);
+
   const isRegistered = Boolean(registeredAt);
 
   const webhookUrl =
@@ -81,6 +141,11 @@ export function InstagramConfig() {
           access_token?: string;
           registered_at?: string | null;
           last_registration_error?: string | null;
+          meta_app_id?: string | null;
+          has_app_credentials?: boolean;
+          token_expires_at?: string | null;
+          token_refreshed_at?: string | null;
+          last_refresh_error?: string | null;
         };
         setConfig(data as unknown as Record<string, unknown>);
         setInstagramBusinessAccountId(data.instagram_business_account_id || '');
@@ -91,6 +156,15 @@ export function InstagramConfig() {
         setRegisteredAt(data.registered_at || null);
         setLastRegistrationError(data.last_registration_error || null);
         setRegistrationProbe(null);
+
+        setMetaAppId(data.meta_app_id || '');
+        setMetaAppSecret(MASKED_TOKEN);
+        setAppIdEdited(false);
+        setSecretEdited(false);
+        setHasAppCredentials(Boolean(data.has_app_credentials));
+        setTokenExpiresAt(data.token_expires_at || null);
+        setTokenRefreshedAt(data.token_refreshed_at || null);
+        setLastRefreshError(data.last_refresh_error || null);
 
         if (data.status === 'connected') {
           setConnectionStatus('connected');
@@ -108,6 +182,14 @@ export function InstagramConfig() {
         setTokenEdited(false);
         setRegisteredAt(null);
         setLastRegistrationError(null);
+        setMetaAppId('');
+        setMetaAppSecret('');
+        setAppIdEdited(false);
+        setSecretEdited(false);
+        setHasAppCredentials(false);
+        setTokenExpiresAt(null);
+        setTokenRefreshedAt(null);
+        setLastRefreshError(null);
         setConnectionStatus('disconnected');
         setStatusMessage('');
       }
@@ -148,6 +230,13 @@ export function InstagramConfig() {
         toast.error('Please re-enter the Access Token to save changes');
         setSaving(false);
         return;
+      }
+
+      if (appIdEdited && metaAppId.trim()) {
+        payload.meta_app_id = metaAppId.trim();
+      }
+      if (secretEdited && metaAppSecret !== MASKED_TOKEN && metaAppSecret.trim()) {
+        payload.meta_app_secret = metaAppSecret.trim();
       }
 
       const res = await fetch('/api/account/instagram-config', {
@@ -203,6 +292,14 @@ export function InstagramConfig() {
       setTokenEdited(false);
       setRegisteredAt(null);
       setLastRegistrationError(null);
+      setMetaAppId('');
+      setMetaAppSecret('');
+      setAppIdEdited(false);
+      setSecretEdited(false);
+      setHasAppCredentials(false);
+      setTokenExpiresAt(null);
+      setTokenRefreshedAt(null);
+      setLastRefreshError(null);
       setConnectionStatus('disconnected');
       setConfig(null);
       setStatusMessage('');
@@ -430,6 +527,67 @@ export function InstagramConfig() {
                     Token is hidden for security. Re-enter it to update configuration.
                   </p>
                 )}
+                {tokenExpiresAt && (
+                  <TokenStatus
+                    expiresAt={tokenExpiresAt}
+                    refreshedAt={tokenRefreshedAt}
+                    refreshError={lastRefreshError}
+                  />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Meta App ID</Label>
+                <Input
+                  type="text"
+                  placeholder="App ID from Meta Developer Console"
+                  value={metaAppId}
+                  onChange={(e) => {
+                    setMetaAppId(e.target.value);
+                    setAppIdEdited(true);
+                  }}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for automatic token refresh. Found in your Meta App Dashboard.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">Meta App Secret</Label>
+                <div className="relative">
+                  <Input
+                    type={showAppSecret ? 'text' : 'password'}
+                    placeholder="App Secret from Meta Developer Console"
+                    value={metaAppSecret}
+                    onChange={(e) => {
+                      setMetaAppSecret(e.target.value);
+                      setSecretEdited(true);
+                    }}
+                    onFocus={() => {
+                      if (metaAppSecret === MASKED_TOKEN) {
+                        setMetaAppSecret('');
+                        setSecretEdited(true);
+                      }
+                    }}
+                    className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAppSecret(!showAppSecret)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showAppSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                {hasAppCredentials && !secretEdited && (
+                  <p className="text-xs text-muted-foreground">
+                    App Secret is hidden. Re-enter it to update.
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Encrypted at rest. Required for automatic 60-day token renewal.
+                </p>
               </div>
 
               <div className="space-y-2">

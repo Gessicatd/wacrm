@@ -10,6 +10,7 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
+  Calendar,
   Code2,
   Crown,
   FolderOpen,
@@ -103,6 +104,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", labelKey: "nav.broadcasts", icon: Radio },
   { href: "/automations", labelKey: "nav.automations", icon: Zap },
   { href: "/flows", labelKey: "nav.flows", icon: Workflow, beta: true },
+  { href: "/calendar", labelKey: "nav.calendar", icon: Calendar },
   { href: "/media-library", labelKey: "nav.mediaLibrary", icon: FolderOpen },
 ];
 
