@@ -367,10 +367,26 @@ export interface PipelineStage {
   name: string;
   position: number;
   color: string;
+  entry_criteria?: string | null;
+  exit_criteria?: string | null;
+  sla_hours?: number | null;
+  probability?: number | null;
   created_at: string;
 }
 
 export type DealStatus = 'open' | 'won' | 'lost';
+export type LeadIntent = 'unknown' | 'low' | 'medium' | 'high';
+export type AppointmentStatus =
+  | 'not_scheduled'
+  | 'scheduled'
+  | 'confirmed'
+  | 'completed'
+  | 'no_show'
+  | 'cancelled'
+  | 'rescheduled';
+export type ForecastCategory = 'unclassified' | 'commit' | 'best_case' | 'stretch';
+export type ConsentStatus = 'unknown' | 'granted' | 'revoked' | 'not_required';
+export type HandoffStatus = 'not_started' | 'pending' | 'complete' | 'blocked';
 
 export interface Deal {
   id: string;
@@ -389,6 +405,30 @@ export interface Deal {
   currency?: string;
   notes?: string;
   expected_close_date?: string;
+  service_name?: string | null;
+  unit_name?: string | null;
+  professional_name?: string | null;
+  source_channel?: string | null;
+  campaign_name?: string | null;
+  lead_intent?: LeadIntent;
+  appointment_at?: string | null;
+  appointment_status?: AppointmentStatus;
+  forecast_category?: ForecastCategory;
+  next_action?: string | null;
+  next_action_at?: string | null;
+  next_action_channel?: string | null;
+  objection_code?: string | null;
+  loss_reason?: string | null;
+  recycle_at?: string | null;
+  consent_status?: ConsentStatus;
+  consent_source?: string | null;
+  consent_recorded_at?: string | null;
+  handoff_status?: HandoffStatus;
+  handoff_notes?: string | null;
+  plan_presented_at?: string | null;
+  won_at?: string | null;
+  lost_at?: string | null;
+  last_stage_changed_at?: string;
   status?: DealStatus;
   created_at: string;
   updated_at?: string;
@@ -490,29 +530,9 @@ export interface TagTriggerConfig {
 }
 
 export interface TimeBasedTriggerConfig {
-  /** Cron expression or simple HH:mm string. Use HH:mm for daily schedules
-   *  parsed by the cron endpoint; full cron expressions also accepted. */
+  /** Cron expression or simple HH:mm string; engine can accept either. */
   schedule: string;
   timezone?: string;
-
-  /** How to select the contacts this automation fires for.
-   *  - 'tags': fire for every contact that has at least one of `tag_ids`
-   *  - 'pipeline': fire for every contact with a deal in the given pipeline/stage/status
-   *  - 'both': intersect — contacts must match BOTH tags AND pipeline criteria
-   *  Defaults to 'tags' if tag_ids is set, 'pipeline' if pipeline settings exist,
-   *  otherwise 'tags'. */
-  target_mode?: 'tags' | 'pipeline' | 'both';
-
-  /** Tag IDs the contact must have (at least one). OR logic — if the contact
-   *  has ANY of these tags they're included. */
-  tag_ids?: string[];
-
-  /** Pipeline the contact must have a deal in. */
-  pipeline_id?: string;
-  /** Stage within that pipeline. If omitted, any stage matches. */
-  stage_id?: string;
-  /** Deal status filter. If omitted, defaults to 'open'. */
-  deal_status?: DealStatus;
 }
 
 export type AutomationTriggerConfig =
@@ -569,6 +589,11 @@ export interface CreateDealStepConfig {
   stage_id: string;
   title: string;
   value?: number;
+  service_name?: string;
+  source_channel?: string;
+  next_action?: string;
+  /** ISO timestamp or an interpolated value supplied by a webhook/AI extraction. */
+  next_action_at?: string;
 }
 
 export interface WaitStepConfig {
@@ -690,79 +715,4 @@ export interface AutomationLog {
   error_message?: string | null;
   created_at: string;
   contact?: Contact;
-}
-
-// ============================================================
-// Google Calendar (migrations 046 + 047)
-// ============================================================
-
-export type CalendarSyncStatus =
-  | 'synced'
-  | 'pending_create'
-  | 'pending_update'
-  | 'pending_delete'
-  | 'conflict';
-
-export type CalendarEventStatus = 'scheduled' | 'cancelled' | 'tentative';
-
-export interface CalendarConnection {
-  id: string;
-  account_id: string;
-  created_by: string | null;
-  google_email: string;
-  access_token: string;
-  refresh_token: string;
-  token_expires_at: string;
-  calendar_id: string;
-  calendar_name: string | null;
-  sync_enabled: boolean;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CalendarConnectionPublic {
-  id: string;
-  google_email: string;
-  calendar_id: string;
-  calendar_name: string | null;
-  sync_enabled: boolean;
-  is_active: boolean;
-  token_expires_at: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface CalendarEventAttendee {
-  email: string;
-  name?: string;
-  responseStatus?: string;
-}
-
-export interface CalendarEvent {
-  id: string;
-  account_id: string;
-  google_event_id: string | null;
-  google_calendar_id: string | null;
-  title: string;
-  description: string | null;
-  location: string | null;
-  start_at: string;
-  end_at: string;
-  is_all_day: boolean;
-  timezone: string | null;
-  status: CalendarEventStatus;
-  contact_id: string | null;
-  deal_id: string | null;
-  conference_link: string | null;
-  attendees_json: CalendarEventAttendee[];
-  recurrence_rule: string | null;
-  color: string | null;
-  sync_status: CalendarSyncStatus;
-  last_synced_at: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-  contact?: Contact;
-  deal?: Deal;
 }
