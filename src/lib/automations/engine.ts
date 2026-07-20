@@ -611,6 +611,10 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         value: cfg.value ?? 0,
         currency: acct?.default_currency ?? 'USD',
         status: 'open',
+        service_name: cfg.service_name ? interpolate(cfg.service_name, args) : null,
+        source_channel: cfg.source_channel ? interpolate(cfg.source_channel, args) : null,
+        next_action: cfg.next_action ? interpolate(cfg.next_action, args) : 'Review and contact new lead',
+        next_action_at: cfg.next_action_at ? interpolate(cfg.next_action_at, args) : new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
       })
       return 'deal created'
     }
