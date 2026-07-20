@@ -8,11 +8,19 @@ describe("strategy plan generator", () => {
     expect(plan.priorities[0].dimension).toBe("Atendimento");
     expect(plan.ninetyDays).toHaveLength(3);
     expect(plan.evidenceNeeded.length).toBeGreaterThan(2);
+    expect(plan.methodologyBasis.length).toBeGreaterThan(4);
+    expect(plan.businessDiagnosis.unknowns.length).toBeGreaterThan(0);
+    expect(plan.offerArchitecture.scope.length).toBeGreaterThan(2);
+    expect(plan.funnel.stagesDetail).toHaveLength(6);
+    expect(plan.governance.approvals.join(" ")).toContain("Proprietário");
+    expect(plan.ninetyDays[0].acceptance.length).toBeGreaterThan(0);
   });
 
   it("remains usable when the assessment is incomplete", () => {
     const plan = buildStrategyPlan(null, null);
     expect(plan.title).toContain("serviço high-ticket");
     expect(plan.funnel.stages.length).toBeGreaterThan(4);
+    expect(plan.version).toContain("v2.0");
+    expect(plan.businessDiagnosis.unknowns.length).toBeGreaterThan(0);
   });
 });
