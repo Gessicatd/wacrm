@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { BarChart3, ExternalLink, Facebook, Globe, Search } from 'lucide-react';
+import { BarChart3, ExternalLink, Globe, Megaphone, Search } from 'lucide-react';
 
 export function MarketingIntegrations() {
   return (
@@ -13,7 +13,7 @@ export function MarketingIntegrations() {
         </p>
       </header>
       <div className="grid gap-3 md:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4"><Facebook className="h-5 w-5 text-primary" /><h3 className="mt-3 font-medium">Meta Ads</h3><p className="mt-1 text-sm text-muted-foreground">Pixel, Dataset e atribuição de campanhas.</p></div>
+        <div className="rounded-xl border border-border bg-card p-4"><Megaphone className="h-5 w-5 text-primary" /><h3 className="mt-3 font-medium">Meta Ads</h3><p className="mt-1 text-sm text-muted-foreground">Pixel, Dataset e atribuição de campanhas.</p></div>
         <div className="rounded-xl border border-border bg-card p-4"><Search className="h-5 w-5 text-primary" /><h3 className="mt-3 font-medium">Google Ads</h3><p className="mt-1 text-sm text-muted-foreground">GCLID, campanhas e conversões offline.</p></div>
         <div className="rounded-xl border border-border bg-card p-4"><Globe className="h-5 w-5 text-primary" /><h3 className="mt-3 font-medium">GTM e site</h3><p className="mt-1 text-sm text-muted-foreground">UTMs, consentimento e eventos.</p></div>
       </div>
