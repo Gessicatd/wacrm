@@ -533,6 +533,13 @@ export interface TimeBasedTriggerConfig {
   /** Cron expression or simple HH:mm string; engine can accept either. */
   schedule: string;
   timezone?: string;
+
+  /** How to select contacts for a scheduled automation. */
+  target_mode?: 'tags' | 'pipeline' | 'both';
+  tag_ids?: string[];
+  pipeline_id?: string;
+  stage_id?: string;
+  deal_status?: DealStatus;
 }
 
 export type AutomationTriggerConfig =
