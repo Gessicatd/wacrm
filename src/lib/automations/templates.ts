@@ -10,6 +10,9 @@ export type TemplateSlug =
   | 'out_of_office'
   | 'lead_qualifier'
   | 'follow_up_reminder'
+  | 'health_lead_intake'
+  | 'appointment_confirmation'
+  | 'plan_follow_up'
 
 export interface TemplateStepSeed {
   step_type: AutomationStepType
@@ -123,6 +126,58 @@ export const AUTOMATION_TEMPLATES: Record<TemplateSlug, AutomationTemplateDefini
             "Just circling back — did you have any other questions for us? Happy to help!",
         },
       },
+    ],
+  },
+  health_lead_intake: {
+    slug: 'health_lead_intake',
+    name: 'High-ticket Lead Intake',
+    description: 'Acknowledge a new enquiry, collect commercial context and hand off to a human.',
+    trigger_type: 'first_inbound_message',
+    trigger_config: {},
+    steps: [
+      {
+        step_type: 'send_message',
+        step_config: {
+          text: 'Olá! Obrigado por falar com a nossa equipe. Para direcionarmos seu atendimento, qual resultado você está buscando e qual é a melhor cidade/unidade para você?',
+        },
+      },
+      { step_type: 'wait', step_config: { amount: 5, unit: 'minutes' } },
+      { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
+    ],
+  },
+  appointment_confirmation: {
+    slug: 'appointment_confirmation',
+    name: 'Evaluation Confirmation',
+    description: 'Confirm an evaluation and route questions to the team without giving clinical advice.',
+    trigger_type: 'tag_added',
+    trigger_config: { tag_id: '' },
+    steps: [
+      {
+        step_type: 'send_message',
+        step_config: {
+          text: 'Sua avaliação está agendada. Pode confirmar sua presença respondendo SIM? Se precisar alterar o horário ou tiver alguma dúvida, nossa equipe assume a conversa por aqui.',
+        },
+      },
+      { step_type: 'wait', step_config: { amount: 1, unit: 'days' } },
+      { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
+    ],
+  },
+  plan_follow_up: {
+    slug: 'plan_follow_up',
+    name: 'Post-plan Follow-up',
+    description: 'Consent-aware follow-up after a plan is presented, with a clean human handoff.',
+    trigger_type: 'tag_added',
+    trigger_config: { tag_id: '' },
+    steps: [
+      { step_type: 'wait', step_config: { amount: 1, unit: 'days' } },
+      {
+        step_type: 'send_message',
+        step_config: {
+          text: 'Olá! Ficou alguma dúvida sobre as etapas, condições ou próximos passos apresentados? Posso pedir para a pessoa responsável falar com você.',
+        },
+      },
+      { step_type: 'wait', step_config: { amount: 2, unit: 'days' } },
+      { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
     ],
   },
 }
