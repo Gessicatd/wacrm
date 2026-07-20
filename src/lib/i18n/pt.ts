@@ -7,6 +7,7 @@ const pt: TranslationDict = {
   'nav.contacts': 'Contatos',
   'nav.pipelines': 'Pipelines',
   'nav.commercial': 'Operação Comercial',
+  'nav.marketingAttribution': 'Atribuição de Marketing',
   'nav.broadcasts': 'Transmissões',
   'nav.automations': 'Automações',
   'nav.flows': 'Fluxos',
