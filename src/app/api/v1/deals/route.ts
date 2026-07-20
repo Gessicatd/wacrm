@@ -111,6 +111,17 @@ export async function POST(request: Request) {
     const expected_close_date = typeof body.expected_close_date === 'string' ? body.expected_close_date : null;
     const assigned_to = typeof body.assigned_to === 'string' ? body.assigned_to : null;
     const conversation_id = typeof body.conversation_id === 'string' ? body.conversation_id : null;
+    const textOrNull = (key: string) => typeof body[key] === 'string' ? (body[key] as string).trim() || null : null;
+    const lead_intent = textOrNull('lead_intent') ?? 'unknown';
+    const appointment_status = textOrNull('appointment_status') ?? 'not_scheduled';
+    const forecast_category = textOrNull('forecast_category') ?? 'unclassified';
+    const consent_status = textOrNull('consent_status') ?? 'unknown';
+    const handoff_status = textOrNull('handoff_status') ?? 'not_started';
+    if (!['unknown', 'low', 'medium', 'high'].includes(lead_intent)) return fail('bad_request', 'Invalid lead_intent', 400);
+    if (!['not_scheduled', 'scheduled', 'confirmed', 'completed', 'no_show', 'cancelled', 'rescheduled'].includes(appointment_status)) return fail('bad_request', 'Invalid appointment_status', 400);
+    if (!['unclassified', 'commit', 'best_case', 'stretch'].includes(forecast_category)) return fail('bad_request', 'Invalid forecast_category', 400);
+    if (!['unknown', 'granted', 'revoked', 'not_required'].includes(consent_status)) return fail('bad_request', 'Invalid consent_status', 400);
+    if (!['not_started', 'pending', 'complete', 'blocked'].includes(handoff_status)) return fail('bad_request', 'Invalid handoff_status', 400);
 
     const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId);
 
@@ -125,6 +136,26 @@ export async function POST(request: Request) {
       expected_close_date,
       assigned_to,
       conversation_id,
+      service_name: textOrNull('service_name'),
+      unit_name: textOrNull('unit_name'),
+      professional_name: textOrNull('professional_name'),
+      source_channel: textOrNull('source_channel'),
+      campaign_name: textOrNull('campaign_name'),
+      lead_intent,
+      appointment_at: textOrNull('appointment_at'),
+      appointment_status,
+      forecast_category,
+      next_action: textOrNull('next_action'),
+      next_action_at: textOrNull('next_action_at'),
+      next_action_channel: textOrNull('next_action_channel'),
+      objection_code: textOrNull('objection_code'),
+      loss_reason: textOrNull('loss_reason'),
+      recycle_at: textOrNull('recycle_at'),
+      consent_status,
+      consent_source: textOrNull('consent_source'),
+      consent_recorded_at: textOrNull('consent_recorded_at'),
+      handoff_status,
+      handoff_notes: textOrNull('handoff_notes'),
     });
 
     return ok(deal, 201);
