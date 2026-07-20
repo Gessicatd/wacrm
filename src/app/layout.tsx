@@ -5,6 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
 import { LanguageProvider } from "@/hooks/use-language";
 import { ThemedToaster } from "@/components/themed-toaster";
+import MarketingAttributionCapture from "@/components/marketing-attribution-capture";
 import {
   DEFAULT_MODE,
   DEFAULT_THEME,
@@ -122,6 +123,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">
+        <MarketingAttributionCapture />
         <ThemeProvider>
           <LanguageProvider>
             {children}

@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import type { Attribution } from '@/lib/marketing/attribution';
 
 /** Row select that embeds the contact's tags for serialization. */
 export const CONTACT_SELECT = '*, contact_tags(tags(*))';
@@ -102,6 +103,7 @@ export interface ContactInput {
   name?: string | null;
   email?: string | null;
   company?: string | null;
+  attribution?: Attribution;
 }
 
 /**
@@ -136,6 +138,9 @@ export async function findOrCreateContact(
       name: input.name ?? sanitized,
       email: input.email ?? null,
       company: input.company ?? null,
+      first_touch_attribution: input.attribution ?? {},
+      last_touch_attribution: input.attribution ?? {},
+      attribution_updated_at: input.attribution && Object.keys(input.attribution).length ? new Date().toISOString() : null,
     })
     .select('id')
     .single();
