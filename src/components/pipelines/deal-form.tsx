@@ -7,10 +7,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/hooks/use-language";
 import { CURRENCIES } from "@/lib/currency";
 import type {
+  AppointmentStatus,
+  ConsentStatus,
   Contact,
   Conversation,
   Deal,
   DealStatus,
+  ForecastCategory,
+  HandoffStatus,
+  LeadIntent,
   PipelineStage,
   Profile,
 } from "@/types";
@@ -65,6 +70,24 @@ export function DealForm({
   const [assignedTo, setAssignedTo] = useState("");
   const [expectedCloseDate, setExpectedCloseDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [serviceName, setServiceName] = useState("");
+  const [unitName, setUnitName] = useState("");
+  const [professionalName, setProfessionalName] = useState("");
+  const [sourceChannel, setSourceChannel] = useState("");
+  const [leadIntent, setLeadIntent] = useState<LeadIntent>("unknown");
+  const [appointmentAt, setAppointmentAt] = useState("");
+  const [appointmentStatus, setAppointmentStatus] = useState<AppointmentStatus>("not_scheduled");
+  const [forecastCategory, setForecastCategory] = useState<ForecastCategory>("unclassified");
+  const [nextAction, setNextAction] = useState("");
+  const [nextActionAt, setNextActionAt] = useState("");
+  const [nextActionChannel, setNextActionChannel] = useState("");
+  const [objectionCode, setObjectionCode] = useState("");
+  const [lossReason, setLossReason] = useState("");
+  const [recycleAt, setRecycleAt] = useState("");
+  const [consentStatus, setConsentStatus] = useState<ConsentStatus>("unknown");
+  const [consentSource, setConsentSource] = useState("");
+  const [handoffStatus, setHandoffStatus] = useState<HandoffStatus>("not_started");
+  const [handoffNotes, setHandoffNotes] = useState("");
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -94,6 +117,24 @@ export function DealForm({
       setAssignedTo(deal.assigned_to ?? "");
       setExpectedCloseDate(deal.expected_close_date ?? "");
       setNotes(deal.notes ?? "");
+      setServiceName(deal.service_name ?? "");
+      setUnitName(deal.unit_name ?? "");
+      setProfessionalName(deal.professional_name ?? "");
+      setSourceChannel(deal.source_channel ?? "");
+      setLeadIntent(deal.lead_intent ?? "unknown");
+      setAppointmentAt(toLocalDateTime(deal.appointment_at));
+      setAppointmentStatus(deal.appointment_status ?? "not_scheduled");
+      setForecastCategory(deal.forecast_category ?? "unclassified");
+      setNextAction(deal.next_action ?? "");
+      setNextActionAt(toLocalDateTime(deal.next_action_at));
+      setNextActionChannel(deal.next_action_channel ?? "");
+      setObjectionCode(deal.objection_code ?? "");
+      setLossReason(deal.loss_reason ?? "");
+      setRecycleAt(toLocalDateTime(deal.recycle_at));
+      setConsentStatus(deal.consent_status ?? "unknown");
+      setConsentSource(deal.consent_source ?? "");
+      setHandoffStatus(deal.handoff_status ?? "not_started");
+      setHandoffNotes(deal.handoff_notes ?? "");
     } else {
       setTitle("");
       setValue("");
@@ -103,6 +144,24 @@ export function DealForm({
       setAssignedTo("");
       setExpectedCloseDate("");
       setNotes("");
+      setServiceName("");
+      setUnitName("");
+      setProfessionalName("");
+      setSourceChannel("");
+      setLeadIntent("unknown");
+      setAppointmentAt("");
+      setAppointmentStatus("not_scheduled");
+      setForecastCategory("unclassified");
+      setNextAction("");
+      setNextActionAt("");
+      setNextActionChannel("");
+      setObjectionCode("");
+      setLossReason("");
+      setRecycleAt("");
+      setConsentStatus("unknown");
+      setConsentSource("");
+      setHandoffStatus("not_started");
+      setHandoffNotes("");
     }
   }, [open, deal, defaultStageId, stages, defaultCurrency]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -156,6 +215,10 @@ export function DealForm({
       toast.error(t('deal.toastRequired'));
       return;
     }
+    if (!nextAction.trim() || !nextActionAt) {
+      toast.error("Every open deal needs a specific next action and due date.");
+      return;
+    }
     setSaving(true);
 
     const payload = {
@@ -168,6 +231,25 @@ export function DealForm({
       assigned_to: assignedTo || null,
       notes: notes.trim() || null,
       expected_close_date: expectedCloseDate || null,
+      service_name: serviceName.trim() || null,
+      unit_name: unitName.trim() || null,
+      professional_name: professionalName.trim() || null,
+      source_channel: sourceChannel.trim() || null,
+      lead_intent: leadIntent,
+      appointment_at: toIsoDateTime(appointmentAt),
+      appointment_status: appointmentStatus,
+      forecast_category: forecastCategory,
+      next_action: nextAction.trim() || null,
+      next_action_at: toIsoDateTime(nextActionAt),
+      next_action_channel: nextActionChannel.trim() || null,
+      objection_code: objectionCode || null,
+      loss_reason: lossReason.trim() || null,
+      recycle_at: toIsoDateTime(recycleAt),
+      consent_status: consentStatus,
+      consent_source: consentSource.trim() || null,
+      consent_recorded_at: consentStatus === "granted" ? new Date().toISOString() : null,
+      handoff_status: handoffStatus,
+      handoff_notes: handoffNotes.trim() || null,
     };
 
     if (deal) {
@@ -213,10 +295,14 @@ export function DealForm({
 
   async function handleStatusChange(status: DealStatus) {
     if (!deal) return;
+    if (status === "lost" && !lossReason.trim()) {
+      toast.error("Record the loss reason before closing this deal.");
+      return;
+    }
     setStatusAction(status);
     const { error } = await supabase
       .from("deals")
-      .update({ status })
+      .update({ status, loss_reason: status === "lost" ? lossReason.trim() : null })
       .eq("id", deal.id);
     setStatusAction(null);
     if (error) {
@@ -376,6 +462,70 @@ export function DealForm({
               />
             </div>
 
+            <FormSection title="Commercial context">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Service / treatment">
+                  <Input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="e.g. Implant treatment" className="border-border bg-muted" />
+                </Field>
+                <Field label="Lead intent">
+                  <Select value={leadIntent} onChange={(v) => setLeadIntent(v as LeadIntent)} options={[
+                    ["unknown", "Not assessed"], ["low", "Low"], ["medium", "Medium"], ["high", "High"],
+                  ]} />
+                </Field>
+                <Field label="Unit">
+                  <Input value={unitName} onChange={(e) => setUnitName(e.target.value)} placeholder="Location or branch" className="border-border bg-muted" />
+                </Field>
+                <Field label="Professional">
+                  <Input value={professionalName} onChange={(e) => setProfessionalName(e.target.value)} placeholder="Responsible professional" className="border-border bg-muted" />
+                </Field>
+                <Field label="Source channel">
+                  <Input value={sourceChannel} onChange={(e) => setSourceChannel(e.target.value)} placeholder="Instagram, Google, referral…" className="border-border bg-muted" />
+                </Field>
+                <Field label="Main objection">
+                  <Select value={objectionCode} onChange={setObjectionCode} options={[
+                    ["", "Not identified"], ["price", "Price"], ["think", "Needs to think"], ["fear", "Fear / insecurity"], ["time", "Time"], ["competition", "Comparing options"], ["decision_maker", "Needs another decision maker"],
+                  ]} />
+                </Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="Evaluation / appointment">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Date and time"><Input type="datetime-local" value={appointmentAt} onChange={(e) => setAppointmentAt(e.target.value)} className="border-border bg-muted" /></Field>
+                <Field label="Attendance status"><Select value={appointmentStatus} onChange={(v) => setAppointmentStatus(v as AppointmentStatus)} options={[
+                  ["not_scheduled", "Not scheduled"], ["scheduled", "Scheduled"], ["confirmed", "Confirmed"], ["completed", "Completed"], ["no_show", "No-show"], ["cancelled", "Cancelled"], ["rescheduled", "Rescheduled"],
+                ]} /></Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="Next action and forecast">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Next action"><Input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Specific bilateral action" className="border-border bg-muted" /></Field>
+                <Field label="Due date"><Input type="datetime-local" value={nextActionAt} onChange={(e) => setNextActionAt(e.target.value)} className="border-border bg-muted" /></Field>
+                <Field label="Channel"><Select value={nextActionChannel} onChange={setNextActionChannel} options={[["", "Select"], ["whatsapp", "WhatsApp"], ["phone", "Phone"], ["email", "Email"], ["meeting", "Meeting"], ["internal", "Internal task"]]} /></Field>
+                <Field label="Forecast"><Select value={forecastCategory} onChange={(v) => setForecastCategory(v as ForecastCategory)} options={[
+                  ["unclassified", "Unclassified"], ["commit", "Commit"], ["best_case", "Best case"], ["stretch", "Stretch"],
+                ]} /></Field>
+                <Field label="Recycle on"><Input type="datetime-local" value={recycleAt} onChange={(e) => setRecycleAt(e.target.value)} className="border-border bg-muted" /></Field>
+                <Field label="Loss reason"><Input value={lossReason} onChange={(e) => setLossReason(e.target.value)} placeholder="Required when lost" className="border-border bg-muted" /></Field>
+              </div>
+            </FormSection>
+
+            <FormSection title="Consent and handoff">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Contact consent"><Select value={consentStatus} onChange={(v) => setConsentStatus(v as ConsentStatus)} options={[
+                  ["unknown", "Unknown"], ["granted", "Granted"], ["revoked", "Revoked"], ["not_required", "Not required"],
+                ]} /></Field>
+                <Field label="Consent source"><Input value={consentSource} onChange={(e) => setConsentSource(e.target.value)} placeholder="Form, event, referral…" className="border-border bg-muted" /></Field>
+                <Field label="Handoff status"><Select value={handoffStatus} onChange={(v) => setHandoffStatus(v as HandoffStatus)} options={[
+                  ["not_started", "Not started"], ["pending", "Pending"], ["complete", "Complete"], ["blocked", "Blocked"],
+                ]} /></Field>
+              </div>
+              <Field label="Commercial handoff notes (do not include clinical records)">
+                <Textarea value={handoffNotes} onChange={(e) => setHandoffNotes(e.target.value)} placeholder="Promises, preferences and agreed next steps" className="min-h-20 border-border bg-muted" />
+              </Field>
+            </FormSection>
+
             {deal && (
               <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-3">
                 <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -439,7 +589,7 @@ export function DealForm({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={saving || !title.trim() || !contactId || !stageId}
+                disabled={saving || !title.trim() || !contactId || !stageId || !nextAction.trim() || !nextActionAt}
                 className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {saving ? t('deal.saving') : deal ? t('deal.saveChanges') : t('deal.create')}
@@ -484,4 +634,30 @@ export function DealForm({
       </SheetContent>
     </Sheet>
   );
+}
+
+function toLocalDateTime(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function toIsoDateTime(value: string) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="space-y-3 rounded-xl border border-border/60 bg-muted/20 p-3"><h3 className="text-xs font-semibold uppercase tracking-wider text-primary">{title}</h3>{children}</section>;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="grid gap-2"><Label className="text-muted-foreground">{label}</Label>{children}</div>;
+}
+
+function Select({ value, onChange, options }: { value: string; onChange: (value: string) => void; options: [string, string][] }) {
+  return <select value={value} onChange={(e) => onChange(e.target.value)} className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary">{options.map(([optionValue, label]) => <option key={optionValue} value={optionValue}>{label}</option>)}</select>;
 }

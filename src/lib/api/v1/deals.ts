@@ -32,6 +32,26 @@ export interface ApiDeal {
   currency: string | null;
   notes: string | null;
   expected_close_date: string | null;
+  service_name: string | null;
+  unit_name: string | null;
+  professional_name: string | null;
+  source_channel: string | null;
+  campaign_name: string | null;
+  lead_intent: string;
+  appointment_at: string | null;
+  appointment_status: string;
+  forecast_category: string;
+  next_action: string | null;
+  next_action_at: string | null;
+  next_action_channel: string | null;
+  objection_code: string | null;
+  loss_reason: string | null;
+  recycle_at: string | null;
+  consent_status: string;
+  consent_source: string | null;
+  consent_recorded_at: string | null;
+  handoff_status: string;
+  handoff_notes: string | null;
   status: 'open' | 'won' | 'lost';
   created_at: string;
   updated_at: string | null;
@@ -60,6 +80,26 @@ export function serializeDeal(row: Record<string, unknown>): ApiDeal {
     currency: (row.currency as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
     expected_close_date: (row.expected_close_date as string | null) ?? null,
+    service_name: (row.service_name as string | null) ?? null,
+    unit_name: (row.unit_name as string | null) ?? null,
+    professional_name: (row.professional_name as string | null) ?? null,
+    source_channel: (row.source_channel as string | null) ?? null,
+    campaign_name: (row.campaign_name as string | null) ?? null,
+    lead_intent: (row.lead_intent as string | null) ?? 'unknown',
+    appointment_at: (row.appointment_at as string | null) ?? null,
+    appointment_status: (row.appointment_status as string | null) ?? 'not_scheduled',
+    forecast_category: (row.forecast_category as string | null) ?? 'unclassified',
+    next_action: (row.next_action as string | null) ?? null,
+    next_action_at: (row.next_action_at as string | null) ?? null,
+    next_action_channel: (row.next_action_channel as string | null) ?? null,
+    objection_code: (row.objection_code as string | null) ?? null,
+    loss_reason: (row.loss_reason as string | null) ?? null,
+    recycle_at: (row.recycle_at as string | null) ?? null,
+    consent_status: (row.consent_status as string | null) ?? 'unknown',
+    consent_source: (row.consent_source as string | null) ?? null,
+    consent_recorded_at: (row.consent_recorded_at as string | null) ?? null,
+    handoff_status: (row.handoff_status as string | null) ?? 'not_started',
+    handoff_notes: (row.handoff_notes as string | null) ?? null,
     status: (row.status as 'open' | 'won' | 'lost') ?? 'open',
     created_at: row.created_at as string,
     updated_at: (row.updated_at as string | null) ?? null,
@@ -95,6 +135,26 @@ export interface DealInput {
   expected_close_date?: string | null;
   assigned_to?: string | null;
   conversation_id?: string | null;
+  service_name?: string | null;
+  unit_name?: string | null;
+  professional_name?: string | null;
+  source_channel?: string | null;
+  campaign_name?: string | null;
+  lead_intent?: string;
+  appointment_at?: string | null;
+  appointment_status?: string;
+  forecast_category?: string;
+  next_action?: string | null;
+  next_action_at?: string | null;
+  next_action_channel?: string | null;
+  objection_code?: string | null;
+  loss_reason?: string | null;
+  recycle_at?: string | null;
+  consent_status?: string;
+  consent_source?: string | null;
+  consent_recorded_at?: string | null;
+  handoff_status?: string;
+  handoff_notes?: string | null;
 }
 
 export async function createDeal(
@@ -119,6 +179,16 @@ export async function createDeal(
   if (input.expected_close_date !== undefined) record.expected_close_date = input.expected_close_date;
   if (input.assigned_to !== undefined) record.assigned_to = input.assigned_to;
   if (input.conversation_id !== undefined) record.conversation_id = input.conversation_id;
+  const commercialFields = [
+    'service_name', 'unit_name', 'professional_name', 'source_channel', 'campaign_name',
+    'lead_intent', 'appointment_at', 'appointment_status', 'forecast_category',
+    'next_action', 'next_action_at', 'next_action_channel', 'objection_code',
+    'loss_reason', 'recycle_at', 'consent_status', 'consent_source',
+    'consent_recorded_at', 'handoff_status', 'handoff_notes',
+  ] as const;
+  for (const field of commercialFields) {
+    if (input[field] !== undefined) record[field] = input[field];
+  }
 
   const { data, error } = await db
     .from('deals')

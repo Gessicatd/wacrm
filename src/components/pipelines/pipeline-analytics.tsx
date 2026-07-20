@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/hooks/use-language";
 import { formatCurrency } from "@/lib/currency";
+import { calculateForecastTotals, getDealHealth } from "@/lib/commercial/deal-health";
 
 interface PipelineAnalyticsProps {
   stages: PipelineStage[];
@@ -66,9 +67,12 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
     const weightedValue = openDeals.reduce((sum, d) => {
       const stage = stageById.get(d.stage_id);
       if (!stage) return sum;
-      const prob = computeStageProbability(stage, sortedStages);
+      const configured = stage.probability;
+      const prob = typeof configured === "number" ? configured / 100 : computeStageProbability(stage, sortedStages);
       return sum + Number(d.value || 0) * prob;
     }, 0);
+    const forecast = calculateForecastTotals(deals);
+    const actionExceptions = openDeals.filter((d) => getDealHealth(d).actionable).length;
 
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -88,6 +92,8 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
       totalValue,
       avgValue,
       weightedValue,
+      forecast,
+      actionExceptions,
       wonThisMonth,
       lostThisMonth,
     };
@@ -95,7 +101,7 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
 
   return (
     <TooltipProvider>
-      <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card/60 p-4 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card/60 p-4 md:grid-cols-4 xl:grid-cols-8">
         <Metric
           icon={<BarChart3 className="h-4 w-4 text-muted-foreground" />}
           label={t('analytics.totalDeals')}
@@ -116,9 +122,27 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
         />
         <Metric
           icon={<TrendingUp className="h-4 w-4 text-purple-400" />}
-          label={t('analytics.weightedValue')}
-          value={formatCurrency(stats.weightedValue, defaultCurrency)}
-          tooltip={t('analytics.tooltipWeightedValue')}
+          label="Commit"
+          value={formatCurrency(stats.forecast.commit, defaultCurrency)}
+          tooltip="Revenue backed by a confirmed decision path for the selected period."
+        />
+        <Metric
+          icon={<TrendingUp className="h-4 w-4 text-blue-400" />}
+          label="Best case"
+          value={formatCurrency(stats.forecast.best_case, defaultCurrency)}
+          tooltip="Healthy opportunities that still depend on one relevant condition."
+        />
+        <Metric
+          icon={<TrendingUp className="h-4 w-4 text-amber-400" />}
+          label="Stretch"
+          value={formatCurrency(stats.forecast.stretch, defaultCurrency)}
+          tooltip="Opportunities that may close if timing or another assumption accelerates."
+        />
+        <Metric
+          icon={<Info className="h-4 w-4 text-red-400" />}
+          label="Action exceptions"
+          value={String(stats.actionExceptions)}
+          tooltip="Open deals without a valid future action or with an overdue action."
         />
         <Metric
           icon={<Trophy className="h-4 w-4 text-primary" />}

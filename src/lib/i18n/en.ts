@@ -7,13 +7,13 @@ const en: TranslationDict = {
   'nav.notifications': 'Notifications',
   'nav.contacts': 'Contacts',
   'nav.pipelines': 'Pipelines',
+  'nav.commercial': 'Commercial OS',
   'nav.broadcasts': 'Broadcasts',
   'nav.automations': 'Automations',
   'nav.flows': 'Flows',
   'nav.settings': 'Settings',
   'nav.apiDocs': 'API Docs',
   'nav.mediaLibrary': 'Media Library',
-  'nav.calendar': 'Calendar',
 
   // Roles
   'role.owner': 'Owner',
@@ -27,6 +27,7 @@ const en: TranslationDict = {
   'pageTitle.notifications': 'Notifications',
   'pageTitle.contacts': 'Contacts',
   'pageTitle.pipelines': 'Pipelines',
+  'pageTitle.commercial': 'Commercial OS',
   'pageTitle.broadcasts': 'Broadcasts',
   'pageTitle.automations': 'Automations',
   'pageTitle.settings': 'Settings',

@@ -116,6 +116,10 @@ export function PipelineSettings({
       name: s.name,
       color: s.color,
       position: i,
+      entry_criteria: s.entry_criteria || null,
+      exit_criteria: s.exit_criteria || null,
+      sla_hours: s.sla_hours || null,
+      probability: s.probability ?? null,
     }));
 
     const [renameRes, stagesRes] = await Promise.all([
@@ -274,6 +278,11 @@ export function PipelineSettings({
                             updated[index] = { ...updated[index], color: v };
                             setLocalStages(updated);
                           }}
+                          onFieldChange={(field, value) => {
+                            const updated = [...localStages];
+                            updated[index] = { ...updated[index], [field]: value };
+                            setLocalStages(updated);
+                          }}
                           onRemove={() => handleRemoveStage(stage.id)}
                           colors={STAGE_COLORS}
                         />
@@ -369,12 +378,14 @@ function SortableStageRow({
   onNameChange,
   onColorChange,
   onRemove,
+  onFieldChange,
   colors,
 }: {
   stage: PipelineStage;
   onNameChange: (v: string) => void;
   onColorChange: (v: string) => void;
   onRemove: () => void;
+  onFieldChange: (field: "entry_criteria" | "exit_criteria" | "sla_hours" | "probability", value: string | number | null) => void;
   colors: string[];
 }) {
   const { t } = useLanguage();
@@ -391,31 +402,21 @@ function SortableStageRow({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center gap-2 rounded-lg border border-border bg-muted p-2"
+      className="rounded-lg border border-border bg-muted p-2"
     >
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing"
-        aria-label={t('pipelines.dragToReorder')}
-      >
-        <GripVertical className="h-4 w-4" />
-      </button>
-      <ColorSwatch value={stage.color} onChange={onColorChange} colors={colors} />
-      <Input
-        value={stage.name}
-        onChange={(e) => onNameChange(e.target.value)}
-        className="h-7 flex-1 border-transparent bg-transparent text-sm text-foreground focus:border-border"
-      />
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onRemove}
-        className="text-muted-foreground hover:text-red-400"
-      >
-        <Trash2 className="h-3 w-3" />
-      </Button>
+      <div className="flex items-center gap-2">
+        <button type="button" {...attributes} {...listeners} className="cursor-grab touch-none text-muted-foreground hover:text-foreground active:cursor-grabbing" aria-label={t('pipelines.dragToReorder')}>
+          <GripVertical className="h-4 w-4" />
+        </button>
+        <ColorSwatch value={stage.color} onChange={onColorChange} colors={colors} />
+        <Input value={stage.name} onChange={(e) => onNameChange(e.target.value)} className="h-7 flex-1 border-transparent bg-transparent text-sm text-foreground focus:border-border" />
+        <Button variant="ghost" size="icon-xs" onClick={onRemove} className="text-muted-foreground hover:text-red-400"><Trash2 className="h-3 w-3" /></Button>
+      </div>
+      <div className="mt-2 grid grid-cols-[1fr_82px_82px] gap-2">
+        <Input value={stage.exit_criteria ?? ""} onChange={(e) => onFieldChange("exit_criteria", e.target.value)} placeholder="Objective exit criterion" className="h-8 bg-background text-xs" />
+        <Input type="number" min={1} value={stage.sla_hours ?? ""} onChange={(e) => onFieldChange("sla_hours", e.target.value ? Number(e.target.value) : null)} placeholder="SLA h" className="h-8 bg-background text-xs" />
+        <Input type="number" min={0} max={100} value={stage.probability ?? ""} onChange={(e) => onFieldChange("probability", e.target.value ? Number(e.target.value) : null)} placeholder="Prob. %" className="h-8 bg-background text-xs" />
+      </div>
     </div>
   );
 }

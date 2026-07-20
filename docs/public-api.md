@@ -414,7 +414,17 @@ Read, update, or delete a single deal. Scopes: `deals:read` /
 `deals:write`. `PATCH` accepts partial updates on any deal field
 (`title`, `value`, `currency`, `notes`, `expected_close_date`,
 `assigned_to`, `conversation_id`, `pipeline_id`, `stage_id`,
-`contact_id`). `DELETE` removes the deal permanently.
+`contact_id`) plus the commercial operating fields added by migration 043:
+`service_name`, `unit_name`, `professional_name`, `source_channel`,
+`campaign_name`, `lead_intent`, `appointment_at`, `appointment_status`,
+`forecast_category`, `next_action`, `next_action_at`,
+`next_action_channel`, `objection_code`, `loss_reason`, `recycle_at`,
+`consent_status`, `consent_source`, `consent_recorded_at`,
+`handoff_status`, and `handoff_notes`. `DELETE` removes the deal permanently.
+
+For health-sector deployments, these fields are commercial only. Do not send
+diagnoses, prescriptions, clinical notes, exams, or patient images through the
+deals API.
 
 ### `POST /api/v1/deals/{id}/move`
 
@@ -440,7 +450,7 @@ curl -X POST https://your-crm.example.com/api/v1/deals/{id}/move \
 ### `POST /api/v1/deals/{id}/status`
 
 Update a deal's status. Scope: `deals:write`. `status` must be `open`,
-`won`, or `lost`.
+`won`, or `lost`. When marking a deal `lost`, `loss_reason` is required.
 
 ```bash
 curl -X POST https://your-crm.example.com/api/v1/deals/{id}/status \
