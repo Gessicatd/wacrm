@@ -26,6 +26,7 @@ const pageTitleKeys: Record<string, string> = {
   "/notifications": "pageTitle.notifications",
   "/contacts": "pageTitle.contacts",
   "/pipelines": "pageTitle.pipelines",
+  "/commercial": "pageTitle.commercial",
   "/broadcasts": "pageTitle.broadcasts",
   "/automations": "pageTitle.automations",
   "/settings": "pageTitle.settings",
