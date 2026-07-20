@@ -10,11 +10,11 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
-  Calendar,
   Code2,
   Crown,
   FolderOpen,
   GitBranch,
+  HeartPulse,
   LayoutDashboard,
   LogOut,
   MessageSquare,
@@ -99,10 +99,10 @@ const navItems: NavItem[] = [
   { href: "/notifications", labelKey: "nav.notifications", icon: Bell },
   { href: "/contacts", labelKey: "nav.contacts", icon: Users },
   { href: "/pipelines", labelKey: "nav.pipelines", icon: GitBranch },
+  { href: "/commercial", labelKey: "nav.commercial", icon: HeartPulse },
   { href: "/broadcasts", labelKey: "nav.broadcasts", icon: Radio },
   { href: "/automations", labelKey: "nav.automations", icon: Zap },
   { href: "/flows", labelKey: "nav.flows", icon: Workflow, beta: true },
-  { href: "/calendar", labelKey: "nav.calendar", icon: Calendar },
   { href: "/media-library", labelKey: "nav.mediaLibrary", icon: FolderOpen },
 ];
 
