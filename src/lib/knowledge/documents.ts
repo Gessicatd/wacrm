@@ -1,0 +1,7 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { auditKnowledge } from './audit'
+import { validateDocumentInput } from './validation'
+import type { KnowledgeDocumentInput } from './types'
+export async function listDocuments(db: SupabaseClient, accountId: string) { return db.from('knowledge_documents').select('*').eq('account_id', accountId).is('deleted_at', null).order('updated_at',{ascending:false}) }
+export async function createDocument(db: SupabaseClient, accountId: string, actorId: string, input: KnowledgeDocumentInput) { const value=validateDocumentInput(input); const result=await db.from('knowledge_documents').insert({account_id:accountId,created_by:actorId,title:value.title,description:value.description??null,source_type:value.sourceType??'manual',source_uri:value.sourceUri??null,mime_type:value.mimeType??'text/plain',metadata:value.metadata}).select().single(); if(!result.error&&result.data) await auditKnowledge(db,{accountId,actorId,documentId:result.data.id,action:'created',entityType:'document'}); return result }
+export async function archiveDocument(db: SupabaseClient, accountId: string, actorId: string, id: string) { const result=await db.from('knowledge_documents').update({status:'archived',deleted_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('account_id',accountId).eq('id',id).is('deleted_at',null).select().single(); if(!result.error) await auditKnowledge(db,{accountId,actorId,documentId:id,action:'archived',entityType:'document'}); return result }
