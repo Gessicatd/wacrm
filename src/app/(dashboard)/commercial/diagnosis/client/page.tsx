@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, CheckCircle2, Sparkles } from "lucide-react";
+import { QuickTutorial } from "@/components/commercial/quick-tutorial";
 
 type Answers = Record<string, string | string[]>;
 type Assessment = { overall_score: number | null; dimension_scores: Record<string, number>; answers?: Answers };
@@ -30,6 +31,7 @@ export default function ClientDiagnosisPage() {
     <section className="rounded-2xl border border-border bg-card p-6 sm:p-8"><h2 className="text-xl font-semibold">O que isso pode representar</h2><div className="mt-5 grid gap-4 sm:grid-cols-3"><Card title="Oportunidades sem retorno" text="Pessoas interessadas podem não receber uma próxima ação clara no momento certo." /><Card title="Decisões sem dados" text="Sem indicadores por etapa, fica difícil saber qual parte do processo precisa de atenção." /><Card title="Dependência de pessoas" text="Quando cada vendedor trabalha de um jeito, o resultado varia e o crescimento fica limitado." /></div></section>
     <section className="rounded-2xl border border-primary/30 bg-primary/5 p-6 sm:p-8"><h2 className="text-xl font-semibold">Como podemos resolver</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">A proposta é estruturar o caminho completo: posicionamento, entrada de oportunidades, atendimento, follow-up, CRM, indicadores e automações supervisionadas. A tecnologia apoia a equipe; não substitui decisões que exigem contexto, responsabilidade ou aprovação humana.</p><ol className="mt-5 space-y-3 text-sm"><Step n="1" text="Organizar o funil e definir o que deve acontecer em cada etapa." /><Step n="2" text="Criar padrões de atendimento e acompanhamento para reduzir perdas." /><Step n="3" text="Configurar o CRM para mostrar prioridades e próximas ações." /><Step n="4" text="Medir resultados e evoluir o processo com base em evidências." /></ol></section>
     <section className="rounded-2xl border border-border bg-card p-6 text-center sm:p-8"><h2 className="text-xl font-semibold">Próxima etapa</h2><p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">Em uma conversa de validação, confirmamos os pontos acima, analisamos exemplos reais e definimos o primeiro plano de implementação para sua empresa.</p><Link href="/commercial/diagnosis" className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:bg-primary/90">Ver plano completo <ArrowRight className="ml-2 h-4 w-4" /></Link></section>
+    <QuickTutorial title="Como apresentar este resultado" steps={["Comece pelo objetivo declarado pela empresa e pelos sinais mais importantes.", "Explique impactos em linguagem simples, sem transformar hipóteses em certezas.", "Confirme exemplos reais com o cliente e registre correções no diagnóstico interno.", "Combine a próxima conversa para validar prioridades, evidências e plano de implementação."]} note="Esta visão é executiva; detalhes internos, limitações e decisões permanecem no diagnóstico completo." />
   </main>;
 }
 

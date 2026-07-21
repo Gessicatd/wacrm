@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ONBOARDING_OPTIONS } from "@/lib/commercial/onboarding-options";
+import { QuickTutorial } from "@/components/commercial/quick-tutorial";
 
 type Answers = Record<string, string | string[]>;
 
@@ -65,6 +66,7 @@ export default function CommercialOnboardingPage() {
       <div className="mt-8 flex items-center justify-between gap-3"><Button variant="outline" onClick={() => setStep((value) => Math.max(0, value - 1))} disabled={step === 0}><ArrowLeft className="mr-2 h-4 w-4" /> Voltar</Button>{step < steps.length - 1 ? <Button onClick={() => setStep((value) => Math.min(steps.length - 1, value + 1))}>Próxima etapa <ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button onClick={submit} disabled={status === "saving"}>{status === "saving" ? "Salvando…" : "Finalizar diagnóstico"}</Button>}</div>
     </section>
     {step === steps.length - 1 && <section className="rounded-2xl border border-border bg-muted/30 p-6"><p className="text-sm font-medium">Prévia do diagnóstico</p><div className="mt-4 grid gap-3 sm:grid-cols-5">{Object.entries(scores).map(([label, value]) => <div key={label} className="rounded-lg border border-border bg-card p-3"><p className="text-xs text-muted-foreground">{label}</p><p className="mt-1 text-xl font-bold">{value}</p></div>)}</div><p className="mt-4 text-sm text-muted-foreground">Pontuação geral: <strong className="text-foreground">{overall}/100</strong>. {status === "saved" && <span className="text-emerald-600"><CheckCircle2 className="mr-1 inline h-4 w-4" /> Diagnóstico salvo.</span>}{status === "error" && <span className="text-red-600">Não foi possível salvar. Tente novamente.</span>}</p></section>}
+    <QuickTutorial title="Como preencher o diagnóstico" steps={["Responda com a situação atual da empresa, não com o cenário desejado.", "Quando não houver dado confiável, escolha ou registre que ainda não sabe.", "Avance pelas etapas e revise a prévia das pontuações antes de finalizar.", "Depois de salvar, abra o diagnóstico interno para validar prioridades e lacunas."]} note="Atualize o diagnóstico quando houver mudança relevante de oferta, equipe, canais ou processo comercial." />
   </main>;
 }
 

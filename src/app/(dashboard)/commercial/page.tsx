@@ -8,6 +8,7 @@ import { calculateForecastTotals, getDealHealth } from "@/lib/commercial/deal-he
 import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/hooks/use-auth";
 import type { Deal } from "@/types";
+import { QuickTutorial } from "@/components/commercial/quick-tutorial";
 
 export default function CommercialPage() {
   const supabase = createClient();
@@ -63,6 +64,7 @@ export default function CommercialPage() {
       <Guardrail icon={ShieldCheck} title="Consent review" value={stats.consentUnknown.length} description="Open opportunities where contact consent provenance is still unknown." />
       <Guardrail icon={CheckCircle2} title="Handoff completion" value={stats.pendingHandoff.length} description="Won deals that have not completed the commercial-to-delivery handoff." />
     </div>
+    <QuickTutorial title="Como usar o comando comercial" steps={["Comece pelas exceções: oportunidades sem próxima ação, atrasadas ou sem responsável.", "Confira agenda, no-shows, consentimento e handoffs antes de analisar o forecast.", "Abra o pipeline para registrar a próxima ação de cada oportunidade prioritária.", "Use diagnóstico, plano, funil e playbooks para corrigir causas recorrentes, não apenas urgências."]} note="A rotina recomendada é diária para exceções e semanal para indicadores, perdas e melhoria do processo." />
   </div>;
 }
 

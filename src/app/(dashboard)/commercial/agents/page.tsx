@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Bot, CheckCircle2, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
 import { COMMERCIAL_AGENTS, agentReadiness, type CommercialAgent } from "@/lib/commercial/agents";
+import { QuickTutorial } from "@/components/commercial/quick-tutorial";
 
 export default function CommercialAgentsPage() {
   const ready = COMMERCIAL_AGENTS.filter((agent) => agent.status === "ready").length;
@@ -14,6 +15,7 @@ export default function CommercialAgentsPage() {
     </header>
     <section className="grid gap-4 md:grid-cols-2">{COMMERCIAL_AGENTS.map((agent) => <AgentCard key={agent.key} agent={agent} />)}</section>
     <section className="rounded-2xl border border-border bg-card p-6"><div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-primary" /><div><h2 className="font-semibold">Como isso entra no cronograma</h2><p className="mt-1 text-sm text-muted-foreground">A base de conhecimento e o CRM são construídos junto com os agentes. O próximo agente a receber um fluxo completo é o de diagnóstico, seguido pelo planejamento estratégico e pelo follow-up.</p></div></div><div className="mt-5 grid gap-3 md:grid-cols-3"><Roadmap n="01" title="Contexto" text="Metodologia, onboarding, conversas e indicadores." /><Roadmap n="02" title="Recomendação" text="O agente explica o que encontrou e propõe a próxima ação." /><Roadmap n="03" title="Execução controlada" text="A equipe aprova; o CRM registra e executa o permitido." /></div></section>
+    <QuickTutorial title="Como trabalhar com os agentes" steps={["Escolha o agente pela função e confira se ele está pronto ou ainda em construção.", "Leia objetivo, ferramentas permitidas, conhecimento utilizado e limite de autonomia.", "Execute pelo fluxo correspondente e confira evidências e logs na revisão.", "Aprove decisões estratégicas ou externas antes de permitir qualquer execução."]} note="Agentes sugerem e organizam; preço, publicação, reclamações e exceções continuam sob responsabilidade humana." />
   </main>;
 }
 

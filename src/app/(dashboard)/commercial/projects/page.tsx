@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { QuickTutorial } from '@/components/commercial/quick-tutorial';
 import {
   ArrowLeft,
   Bot,
@@ -294,6 +295,16 @@ export default function ConsultingProjectsPage() {
           ))
         )}
       </section>
+      <QuickTutorial
+        title="Como operar os projetos"
+        steps={[
+          'Crie um projeto para cada empresa ou iniciativa, com objetivo e escopo claros.',
+          'Execute o diagnóstico para gerar o primeiro plano estratégico em revisão.',
+          'Abra a fila de revisão, confira evidências e aprove ou solicite ajustes.',
+          'Depois da aprovação, prepare a pesquisa e acompanhe os próximos artefatos.',
+        ]}
+        note="Não misture empresas no mesmo projeto e nunca registre credenciais ou dados sensíveis nos campos livres."
+      />
     </main>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { QuickTutorial } from '@/components/commercial/quick-tutorial';
 import {
   ArrowRight,
   BarChart3,
@@ -148,15 +149,16 @@ export default function StrategyHubPage() {
           )
         )}
       </section>
-      <section className="border-primary/20 bg-primary/5 rounded-2xl border p-5">
-        <h2 className="font-semibold">Como usar este centro</h2>
-        <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-          Sempre começamos pelo diagnóstico, validamos o plano com o
-          proprietário, transformamos as decisões em funil e playbooks, e só
-          então ativamos automações e agentes. O plano pode ser revisado a
-          qualquer momento com novas evidências.
-        </p>
-      </section>
+      <QuickTutorial
+        title="Como usar o Centro Estratégico"
+        steps={[
+          'Comece pelo onboarding e diagnóstico para registrar a realidade atual.',
+          'Crie o projeto e aprove o plano estratégico antes de avançar.',
+          'Pesquise mercado e concorrência; depois valide público, oferta e posicionamento.',
+          'Transforme decisões aprovadas em funil, playbooks, indicadores e automações supervisionadas.',
+        ]}
+        note="O plano pode ser revisado sempre que surgirem novas evidências; mudanças estratégicas importantes exigem nova aprovação."
+      />
     </main>
   );
 }

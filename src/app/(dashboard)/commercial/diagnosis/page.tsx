@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, ArrowLeft, BarChart3, ClipboardList, Clock3, Database, ListChecks, Target } from "lucide-react";
+import { QuickTutorial } from "@/components/commercial/quick-tutorial";
 
 type Answers = Record<string, string | string[]>;
 type Assessment = {
@@ -69,6 +70,7 @@ export default function CommercialDiagnosisPage() {
 
       <section className="grid gap-6 lg:grid-cols-2"><div className="rounded-2xl border border-border bg-card p-6"><SectionTitle title="Configuração que o CRM deverá receber" subtitle="A implementação transforma o diagnóstico em operação." /><ul className="mt-5 space-y-3 text-sm text-muted-foreground"><li>• Funil com etapas e critérios claros de avanço.</li><li>• Campos de origem, oferta, prioridade, consentimento e próxima ação.</li><li>• Tarefas automáticas para resposta e acompanhamento.</li><li>• Playbooks revisáveis para equipe e agente comercial.</li><li>• Painel com conversão, velocidade, perdas e receita.</li></ul></div><div className="rounded-2xl border border-border bg-card p-6"><SectionTitle title="Como o resultado será usado" subtitle="Cada área recebe uma orientação diferente." /><ul className="mt-5 space-y-3 text-sm text-muted-foreground"><li><strong className="text-foreground">Gestão:</strong> decide prioridades e aprova mudanças.</li><li><strong className="text-foreground">Equipe comercial:</strong> executa etapas, tarefas e roteiros.</li><li><strong className="text-foreground">Agente de IA:</strong> sugere respostas e próximos passos dentro dos limites aprovados.</li><li><strong className="text-foreground">Implementação:</strong> configura CRM, automações e indicadores.</li></ul></div></section>
     </>}
+    <QuickTutorial title="Como interpretar o diagnóstico" steps={["Leia primeiro a linha de base e confira se os dados representam a operação real.", "Priorize dimensões com menor pontuação e maior impacto no objetivo de 90 dias.", "Separe fatos comprovados de respostas declaradas e evidências ainda ausentes.", "Use as prioridades aprovadas para criar o projeto e gerar o plano estratégico."]} note="Pontuação não é sentença: ela orienta investigação, priorização e acompanhamento da evolução." />
   </main>;
 }
 

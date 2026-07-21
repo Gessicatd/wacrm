@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { QuickTutorial } from '@/components/commercial/quick-tutorial';
 import {
   ArrowLeft,
   Bot,
@@ -204,6 +205,16 @@ export default function ConsultingReviewPage() {
           />
         ))
       )}
+      <QuickTutorial
+        title="Como revisar um artefato"
+        steps={[
+          'Leia o conteúdo completo e confirme se o projeto e a versão estão corretos.',
+          'Confira ferramentas, evidências, confiança e limitações registradas pelo agente.',
+          'Aprove somente quando as conclusões estiverem sustentadas pelas fontes.',
+          'Se houver lacunas, descreva o ajuste necessário e solicite mudanças.',
+        ]}
+        note="A aprovação libera o artefato para alimentar as próximas etapas da metodologia."
+      />
     </main>
   );
 }

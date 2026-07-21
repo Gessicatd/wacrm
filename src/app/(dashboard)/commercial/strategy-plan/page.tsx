@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, FileText, Save, ShieldCheck, Target } from "lucide-react";
 import { buildStrategyPlan, type StrategyPlan } from "@/lib/commercial/strategy-plan";
+import { QuickTutorial } from "@/components/commercial/quick-tutorial";
 
 type Snapshot = { profile?: Record<string, unknown> | null; assessments?: Record<string, unknown>[] };
 const box = "rounded-2xl border border-border bg-card p-6";
@@ -28,6 +29,7 @@ export default function StrategyPlanPage() {
     <section className={box}><Title text="Plano de implementação em 90 dias" /><div className="mt-4 grid gap-3 md:grid-cols-3">{plan.ninetyDays.map((period) => <div key={period.period} className="rounded-xl bg-muted/40 p-4"><p className="text-xs font-semibold text-primary">{period.period}</p><h3 className="mt-2 font-semibold">{period.objective}</h3><List items={period.actions} /><p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground"><strong>Aceite:</strong> {period.acceptance}</p></div>)}</div></section>
     <div className="grid gap-6 lg:grid-cols-2"><section className={box}><Title text="Indicadores" /><div className="mt-4 grid gap-2 sm:grid-cols-2">{plan.indicators.map((indicator) => <CheckItem key={indicator} text={indicator} />)}</div></section><section className={box}><Title icon={ShieldCheck} text="Governança e limites" /><Subheading text="Aprovações" /><List items={plan.governance.approvals} /><Subheading text="Automação" /><List items={plan.governance.automations} /><Subheading text="Compliance" /><List items={plan.governance.compliance} /></section></div>
     <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6"><h2 className="font-semibold">Evidências ainda necessárias antes da aprovação</h2><div className="mt-4 grid gap-2 sm:grid-cols-2">{plan.evidenceNeeded.map((item) => <p key={item} className="text-sm text-muted-foreground">• {item}</p>)}</div></section>
+    <QuickTutorial title="Como revisar o plano estratégico" steps={["Confirme diagnóstico, público, oferta e objetivo antes de avaliar as ações.", "Revise prioridades, critérios de aceite e responsáveis dos próximos 90 dias.", "Não aprove preço, promessa ou investimento enquanto faltarem premissas e provas.", "Salve a versão para revisão e transforme apenas decisões aprovadas em execução."]} note="Use a seção de evidências pendentes como checklist antes da aprovação final." />
   </main>;
 }
 
