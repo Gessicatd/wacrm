@@ -8,6 +8,11 @@ export function providerEnv(provider: MarketingProvider) {
   return { id: process.env.GOOGLE_ADS_CLIENT_ID, secret: process.env.GOOGLE_ADS_CLIENT_SECRET, redirect: process.env.GOOGLE_ADS_REDIRECT_URI }
 }
 
+export function providerIsConfigured(provider: MarketingProvider) {
+  const env = providerEnv(provider)
+  return Boolean(env.id && env.secret && env.redirect && process.env.ENCRYPTION_KEY)
+}
+
 export function createOAuthState(accountId: string, provider: MarketingProvider) {
   const payload = JSON.stringify({ accountId, provider, nonce: crypto.randomBytes(16).toString('hex'), exp: Date.now() + 10 * 60 * 1000 })
   return encrypt(payload)
