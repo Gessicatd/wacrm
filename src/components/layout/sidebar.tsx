@@ -12,6 +12,7 @@ import {
   Bell,
   BarChart3,
   Code2,
+  CreditCard,
   Crown,
   FolderOpen,
   GitBranch,
@@ -106,6 +107,7 @@ const navItems: NavItem[] = [
   { href: "/marketing/attribution", labelKey: "nav.marketingAttribution", icon: BarChart3 },
   { href: "/broadcasts", labelKey: "nav.broadcasts", icon: Radio },
   { href: "/automations", labelKey: "nav.automations", icon: Zap },
+  { href: "/payments", labelKey: "nav.payments", icon: CreditCard },
   { href: "/flows", labelKey: "nav.flows", icon: Workflow, beta: true },
   { href: "/media-library", labelKey: "nav.mediaLibrary", icon: FolderOpen },
 ];

@@ -147,6 +147,7 @@ const TRIGGER_OPTIONS: { value: AutomationTriggerType; label: string; hint: stri
   { value: "conversation_assigned", label: "Conversation Assigned", hint: "When assigned to an agent" },
   { value: "tag_added", label: "Tag Added", hint: "When a tag is added to a contact" },
   { value: "time_based", label: "Time-Based", hint: "On a recurring schedule" },
+  { value: "payment_confirmed", label: "Payment Confirmed", hint: "When a Pix or gateway payment is confirmed" },
 ]
 
 function cid(): string {

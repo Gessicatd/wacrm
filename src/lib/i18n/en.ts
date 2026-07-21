@@ -12,6 +12,7 @@ const en: TranslationDict = {
   'nav.marketingAttribution': 'Marketing Attribution',
   'nav.broadcasts': 'Broadcasts',
   'nav.automations': 'Automations',
+  'nav.payments': 'Payments',
   'nav.flows': 'Flows',
   'nav.settings': 'Settings',
   'nav.apiDocs': 'API Docs',

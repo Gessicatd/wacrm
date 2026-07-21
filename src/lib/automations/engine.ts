@@ -66,6 +66,8 @@ export interface AutomationContext {
   agent_id?: string
   /** Instagram media (post) ID from a comment webhook event. */
   instagram_media_id?: string
+  /** Normalized payment data for payment_confirmed automations. */
+  payment?: { id: string; amount_cents: number; method: 'pix' | 'gateway'; external_reference: string }
 }
 
 export interface DispatchInput {

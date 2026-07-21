@@ -11,6 +11,7 @@ const pt: TranslationDict = {
   'nav.marketingAttribution': 'Atribuição de Marketing',
   'nav.broadcasts': 'Transmissões',
   'nav.automations': 'Automações',
+  'nav.payments': 'Pagamentos',
   'nav.flows': 'Fluxos',
   'nav.settings': 'Configurações',
   'nav.apiDocs': 'API Docs',
