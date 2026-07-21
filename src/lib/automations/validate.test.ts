@@ -221,9 +221,13 @@ describe("validateTriggerForActivation", () => {
   it("requires schedule on time_based triggers", () => {
     expect(validateTriggerForActivation("time_based", {})).toEqual([
       { path: "trigger.schedule", message: "schedule is required" },
+      {
+        path: "trigger",
+        message: "time-based trigger needs at least one targeting criterion (tags or pipeline)",
+      },
     ]);
     expect(
-      validateTriggerForActivation("time_based", { schedule: "0 9 * * *" }),
+      validateTriggerForActivation("time_based", { schedule: "0 9 * * *", pipeline_id: "pipeline-uuid" }),
     ).toEqual([]);
   });
 
