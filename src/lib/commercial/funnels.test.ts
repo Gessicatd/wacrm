@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FUNNEL_TEMPLATES, getFunnelTemplate } from "./funnels";
+import { FUNNEL_TEMPLATES, getFunnelTemplate, validateFunnelDraft } from "./funnels";
 
 describe("methodology funnel templates", () => {
   it("covers multiple acquisition and sales architectures", () => {
@@ -23,5 +23,10 @@ describe("methodology funnel templates", () => {
 
   it("returns a safe default for an unknown template", () => {
     expect(getFunnelTemplate("unknown").id).toBe("service-quiz-sdr-call");
+  });
+
+  it("blocks an incomplete funnel before it reaches the CRM", () => {
+    const issues = validateFunnelDraft("", [{ name: "", owner: "", entryCriteria: "", events: [], requiredFields: [], sla_hours: 0, probability: 120, exit_criteria: "" }]);
+    expect(issues.length).toBeGreaterThan(5);
   });
 });
