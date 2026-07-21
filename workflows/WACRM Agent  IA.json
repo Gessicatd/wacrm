@@ -38,7 +38,7 @@
     },
     {
       "parameters": {
-        "url": "=https://wacrm.autofunil.com.br/api/v1/conversations/{{ $(\"Webhook wacrm\").item.json.body.conversation_id }}",
+        "url": "=https://painel.g2dois.com.br/api/v1/conversations/{{ $(\"Webhook wacrm\").item.json.body.conversation_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "sendHeaders": true,
@@ -77,7 +77,7 @@
     },
     {
       "parameters": {
-        "url": "=https://wacrm.autofunil.com.br/api/v1/contacts/{{ $(\"Buscar Conversa\").item.json.data.contact_id }}",
+        "url": "=https://painel.g2dois.com.br/api/v1/contacts/{{ $(\"Buscar Conversa\").item.json.data.contact_id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "sendHeaders": true,
@@ -116,7 +116,7 @@
     },
     {
       "parameters": {
-        "url": "=https://wacrm.autofunil.com.br/api/v1/conversations/{{ $(\"Webhook wacrm\").item.json.body.conversation_id }}/messages?limit=20",
+        "url": "=https://painel.g2dois.com.br/api/v1/conversations/{{ $(\"Webhook wacrm\").item.json.body.conversation_id }}/messages?limit=20",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "sendHeaders": true,
@@ -707,7 +707,7 @@
             {
               "id": "a594d5f9-30a8-4e8f-bfcf-8f2850c8f65b",
               "name": "url_wacrm",
-              "value": "https://wacrm.autofunil.com.br",
+              "value": "https://painel.g2dois.com.br",
               "type": "string"
             },
             {
@@ -1033,7 +1033,7 @@
     },
     {
       "parameters": {
-        "url": "https://wacrm.autofunil.com.br/api/v1/pipelines",
+        "url": "https://painel.g2dois.com.br/api/v1/pipelines",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "options": {}
@@ -1055,7 +1055,7 @@
     },
     {
       "parameters": {
-        "url": "=https://wacrm.autofunil.com.br/api/v1/deals?contact_id={{ $('Buscar Contato').item.json.data.id }}",
+        "url": "=https://painel.g2dois.com.br/api/v1/deals?contact_id={{ $('Buscar Contato').item.json.data.id }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpBearerAuth",
         "options": {}
@@ -1432,7 +1432,7 @@
       {
         "json": {
           "headers": {
-            "host": "webhook.autofunil.com.br",
+              "host": "={{ $env.N8N_PUBLIC_HOST }}",
             "user-agent": "node",
             "content-length": "76",
             "accept": "*/*",
@@ -1441,7 +1441,7 @@
             "content-type": "application/json",
             "sec-fetch-mode": "cors",
             "x-forwarded-for": "172.18.0.1",
-            "x-forwarded-host": "webhook.autofunil.com.br",
+              "x-forwarded-host": "={{ $env.N8N_PUBLIC_HOST }}",
             "x-forwarded-port": "443",
             "x-forwarded-proto": "https",
             "x-forwarded-server": "4a85b2975515",
@@ -1453,7 +1453,7 @@
             "message_text": "",
             "conversation_id": "ce5a2dda-83a3-4a69-9a0e-e2004040f9b9"
           },
-          "webhookUrl": "https://webhook.autofunil.com.br/webhook/wacrm-ai-agent",
+          "webhookUrl": "={{ $env.N8N_PUBLIC_URL }}/webhook/wacrm-ai-agent",
           "executionMode": "production"
         },
         "pairedItem": {

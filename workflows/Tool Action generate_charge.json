@@ -163,7 +163,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={ \"items\": [{ \"title\": \"{{ $(\"Normalizar Dados\").item.json.description }}\", \"quantity\": 1, \"unit_price\": {{ $(\"Normalizar Dados\").item.json.amount }}, \"currency_id\": \"BRL\" }], \"payer\": { \"name\": \"{{ $(\"Normalizar Dados\").item.json.contact_name }}\" }, \"back_urls\": { \"success\": \"https://wacrm.autofunil.com.br/\", \"failure\": \"https://wacrm.autofunil.com.br/\", \"pending\": \"https://wacrm.autofunil.com.br/\" }, \"auto_return\": \"approved\", \"external_reference\": \"{{ $(\"Normalizar Dados\").item.json.conversation_id }}\" }",
+        "jsonBody": "={ \"items\": [{ \"title\": \"{{ $(\"Normalizar Dados\").item.json.description }}\", \"quantity\": 1, \"unit_price\": {{ $(\"Normalizar Dados\").item.json.amount }}, \"currency_id\": \"BRL\" }], \"payer\": { \"name\": \"{{ $(\"Normalizar Dados\").item.json.contact_name }}\" }, \"back_urls\": { \"success\": \"https://painel.g2dois.com.br/\", \"failure\": \"https://painel.g2dois.com.br/\", \"pending\": \"https://painel.g2dois.com.br/\" }, \"auto_return\": \"approved\", \"external_reference\": \"{{ $(\"Normalizar Dados\").item.json.conversation_id }}\" }",
         "options": {
           "response": {
             "response": {
@@ -262,7 +262,7 @@
         "json": {
           "action": "generate_charge",
           "conversation_id": "0835e7d7-8845-4835-a962-135fb5fde49f",
-          "url_wacrm": "https://wacrm.autofunil.com.br",
+          "url_wacrm": "https://painel.g2dois.com.br",
           "amount": "0.01",
           "description": "Limpeza de pele para Douglas Cuimar - R$ 200"
         },

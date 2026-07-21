@@ -300,7 +300,7 @@
         "json": {
           "action": "check_payment",
           "conversation_id": "0835e7d7-8845-4835-a962-135fb5fde49f",
-          "url_wacrm": "https://wacrm.autofunil.com.br"
+          "url_wacrm": "https://painel.g2dois.com.br"
         },
         "pairedItem": {
           "item": 0
