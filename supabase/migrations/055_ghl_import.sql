@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS ghl_import_jobs (
 );
 CREATE TABLE IF NOT EXISTS ghl_import_records (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(), account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-  job_id UUID NOT NULL REFERENCES ghl_import_jobs(id) ON DELETE CASCADE, resource_type TEXT NOT NULL, external_id TEXT NOT NULL,
-  local_id UUID, payload_hash TEXT, status TEXT NOT NULL DEFAULT 'imported', error TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  job_id UUID REFERENCES ghl_import_jobs(id) ON DELETE SET NULL, resource_type TEXT NOT NULL, external_id TEXT NOT NULL,
+  local_id UUID REFERENCES contacts(id) ON DELETE SET NULL, payload_hash TEXT, status TEXT NOT NULL DEFAULT 'imported', error TEXT, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, resource_type, external_id), CONSTRAINT ghl_import_records_status_check CHECK (status IN ('imported','skipped','failed'))
 );
 CREATE INDEX IF NOT EXISTS idx_ghl_connections_account ON ghl_connections(account_id);
