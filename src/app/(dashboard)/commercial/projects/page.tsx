@@ -10,6 +10,8 @@ import {
   Loader2,
   Plus,
   ShieldCheck,
+  Trash2,
+  CheckCircle2,
 } from 'lucide-react';
 
 type Project = {
@@ -27,6 +29,7 @@ export default function ConsultingProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [form, setForm] = useState({
     name: '',
@@ -43,7 +46,16 @@ export default function ConsultingProjectsPage() {
       data?: Project[];
       error?: string;
     } | null;
-    if (response.ok) setProjects(body?.data ?? []);
+    if (response.ok) {
+      const loaded = body?.data ?? [];
+      setProjects(loaded);
+      const saved = window.localStorage.getItem('consulting_active_project');
+      setSelectedProjectId(
+        loaded.some((project) => project.id === saved)
+          ? saved
+          : (loaded[0]?.id ?? null)
+      );
+    }
     else setMessage(body?.error ?? 'Não foi possível carregar os projetos.');
     setLoading(false);
   }, []);
@@ -60,7 +72,18 @@ export default function ConsultingProjectsPage() {
       }))
       .then(({ response, body }) => {
         if (!active) return;
-        if (response.ok) setProjects(body?.data ?? []);
+        if (response.ok) {
+          const loaded = body?.data ?? [];
+          setProjects(loaded);
+          const saved = window.localStorage.getItem(
+            'consulting_active_project'
+          );
+          setSelectedProjectId(
+            loaded.some((project) => project.id === saved)
+              ? saved
+              : (loaded[0]?.id ?? null)
+          );
+        }
         else
           setMessage(body?.error ?? 'Não foi possível carregar os projetos.');
         setLoading(false);
@@ -133,6 +156,36 @@ export default function ConsultingProjectsPage() {
         ? 'Análise concluída e enviada para revisão humana.'
         : (result?.error ?? 'A execução do agente falhou.')
     );
+    setRunning(null);
+  }
+
+  function selectProject(projectId: string) {
+    setSelectedProjectId(projectId);
+    window.localStorage.setItem('consulting_active_project', projectId);
+    setMessage('Empresa/projeto selecionado para a operação.');
+  }
+
+  async function archiveProject(project: Project) {
+    const confirmed = window.confirm(
+      `Remover “${project.name}” da operação? O projeto será arquivado com seu histórico preservado.`
+    );
+    if (!confirmed) return;
+    setRunning(project.id);
+    setMessage('');
+    const response = await fetch(`/api/consulting/projects/${project.id}`, {
+      method: 'DELETE',
+    });
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    if (!response.ok) {
+      setMessage(body?.error ?? 'Não foi possível remover o projeto.');
+    } else {
+      if (selectedProjectId === project.id)
+        window.localStorage.removeItem('consulting_active_project');
+      setMessage('Projeto arquivado e removido da lista. O histórico foi preservado.');
+      await load();
+    }
     setRunning(null);
   }
 
@@ -256,7 +309,10 @@ export default function ConsultingProjectsPage() {
           </div>
         ) : (
           projects.map((project) => (
-            <article key={project.id} className={box}>
+            <article
+              key={project.id}
+              className={`${box} ${selectedProjectId === project.id ? 'border-primary ring-primary/20 ring-2' : ''}`}
+            >
               <div className="flex flex-col gap-4 md:flex-row md:justify-between">
                 <div>
                   <h3 className="font-semibold">{project.name}</h3>
@@ -267,6 +323,14 @@ export default function ConsultingProjectsPage() {
                     {project.objective}
                   </p>
                 </div>
+                <div className="flex flex-wrap gap-2 md:justify-end">
+                <button
+                  onClick={() => selectProject(project.id)}
+                  className="border-input inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  {selectedProjectId === project.id ? 'Selecionado' : 'Selecionar'}
+                </button>
                 <button
                   onClick={() =>
                     void runAgent(project.id, 'diagnosis-strategy-v1')
@@ -290,6 +354,14 @@ export default function ConsultingProjectsPage() {
                 >
                   <Bot className="h-4 w-4" /> Preparar pesquisa-base
                 </button>
+                <button
+                  onClick={() => void archiveProject(project)}
+                  disabled={running === project.id}
+                  className="border-destructive/30 text-destructive inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 text-sm font-medium disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" /> Remover
+                </button>
+                </div>
               </div>
             </article>
           ))
