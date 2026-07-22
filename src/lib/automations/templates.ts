@@ -13,6 +13,9 @@ export type TemplateSlug =
   | 'health_lead_intake'
   | 'appointment_confirmation'
   | 'plan_follow_up'
+  | 'payment_confirmed_handoff'
+  | 'consultation_intake'
+  | 'human_review_ai_triage'
 
 export interface TemplateStepSeed {
   step_type: AutomationStepType
@@ -177,6 +180,34 @@ export const AUTOMATION_TEMPLATES: Record<TemplateSlug, AutomationTemplateDefini
         },
       },
       { step_type: 'wait', step_config: { amount: 2, unit: 'days' } },
+      { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
+    ],
+  },
+  payment_confirmed_handoff: {
+    slug: 'payment_confirmed_handoff', name: 'Pagamento confirmado → handoff',
+    description: 'Confirma o pagamento e encaminha a conversa para a equipe agendar a consulta.',
+    trigger_type: 'payment_confirmed', trigger_config: {},
+    steps: [
+      { step_type: 'send_message', step_config: { text: 'Pagamento confirmado. Vou encaminhar sua solicitação para a equipe combinar o próximo horário.' } },
+      { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
+    ],
+  },
+  consultation_intake: {
+    slug: 'consultation_intake', name: 'Triagem de consulta',
+    description: 'Pede contexto comercial antes do atendimento humano, sem aconselhamento clínico.',
+    trigger_type: 'first_inbound_message', trigger_config: {},
+    steps: [
+      { step_type: 'send_message', step_config: { text: 'Para eu encaminhar certo, me diga em uma frase o que você quer resolver e qual cidade atende melhor.' } },
+      { step_type: 'ai_extract', step_config: { prompt: 'Extraia somente objetivo e cidade informados pelo contato. Se faltar, deixe vazio.', fields: [{ key: 'objetivo', description: 'objetivo declarado pelo contato' }, { key: 'cidade', description: 'cidade ou unidade mencionada' }] } },
+      { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
+    ],
+  },
+  human_review_ai_triage: {
+    slug: 'human_review_ai_triage', name: 'IA sugere, humano aprova',
+    description: 'Gera uma sugestão de resposta, mas não envia automaticamente.',
+    trigger_type: 'new_message_received', trigger_config: {},
+    steps: [
+      { step_type: 'ai_reply', step_config: { prompt: 'Escreva uma resposta curta, direta e humana. Não invente preço, prazo ou condição. Se faltar informação, faça uma pergunta.' } },
       { step_type: 'assign_conversation', step_config: { mode: 'round_robin' } },
     ],
   },

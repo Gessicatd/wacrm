@@ -2,6 +2,7 @@ import {
   buildStrategyPlan,
   type StrategyPlan,
 } from '@/lib/commercial/strategy-plan';
+import { HUMAN_STYLE_POLICY, HUMAN_STYLE_POLICY_VERSION } from './human-style-policy';
 
 export type EvidenceKind =
   'fact' | 'hypothesis' | 'inference' | 'recommendation';
@@ -43,6 +44,8 @@ export const CONSULTING_AGENT_CATALOG = {
       'build_strategy_plan',
     ],
     required_inputs: ['commercial_profile', 'commercial_assessment'],
+    style_policy_version: HUMAN_STYLE_POLICY_VERSION,
+    style_policy: HUMAN_STYLE_POLICY,
     output_schema: {
       type: 'object',
       required: [
@@ -72,6 +75,8 @@ export const CONSULTING_AGENT_CATALOG = {
       'build_benchmark_matrix',
     ],
     required_inputs: ['approved_strategic_plan', 'authorized_sources'],
+    style_policy_version: HUMAN_STYLE_POLICY_VERSION,
+    style_policy: HUMAN_STYLE_POLICY,
     output_schema: {
       type: 'object',
       required: ['agent_key', 'artifact_type', 'output', 'evidence', 'tools'],
