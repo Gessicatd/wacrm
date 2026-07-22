@@ -462,7 +462,7 @@ export function DealForm({
               />
             </div>
 
-            <FormSection title="Commercial context">
+          <FormSection title="Contexto comercial">
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Service / treatment">
                   <Input value={serviceName} onChange={(e) => setServiceName(e.target.value)} placeholder="e.g. Implant treatment" className="border-border bg-muted" />
@@ -493,35 +493,35 @@ export function DealForm({
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Date and time"><Input type="datetime-local" value={appointmentAt} onChange={(e) => setAppointmentAt(e.target.value)} className="border-border bg-muted" /></Field>
                 <Field label="Attendance status"><Select value={appointmentStatus} onChange={(v) => setAppointmentStatus(v as AppointmentStatus)} options={[
-                  ["not_scheduled", "Not scheduled"], ["scheduled", "Scheduled"], ["confirmed", "Confirmed"], ["completed", "Completed"], ["no_show", "No-show"], ["cancelled", "Cancelled"], ["rescheduled", "Rescheduled"],
+                  ["not_scheduled", "Não agendado"], ["scheduled", "Agendado"], ["confirmed", "Confirmado"], ["completed", "Concluído"], ["no_show", "Não compareceu"], ["cancelled", "Cancelado"], ["rescheduled", "Reagendado"],
                 ]} /></Field>
               </div>
             </FormSection>
 
-            <FormSection title="Next action and forecast">
+          <FormSection title="Próxima ação e previsão">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Next action"><Input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Specific bilateral action" className="border-border bg-muted" /></Field>
+                <Field label="Próxima ação"><Input value={nextAction} onChange={(e) => setNextAction(e.target.value)} placeholder="Ação concreta combinada" className="border-border bg-muted" /></Field>
                 <Field label="Due date"><Input type="datetime-local" value={nextActionAt} onChange={(e) => setNextActionAt(e.target.value)} className="border-border bg-muted" /></Field>
-                <Field label="Channel"><Select value={nextActionChannel} onChange={setNextActionChannel} options={[["", "Select"], ["whatsapp", "WhatsApp"], ["phone", "Phone"], ["email", "Email"], ["meeting", "Meeting"], ["internal", "Internal task"]]} /></Field>
+                <Field label="Canal"><Select value={nextActionChannel} onChange={setNextActionChannel} options={[["", "Selecionar"], ["whatsapp", "WhatsApp"], ["phone", "Telefone"], ["email", "E-mail"], ["meeting", "Reunião"], ["internal", "Tarefa interna"]]} /></Field>
                 <Field label="Forecast"><Select value={forecastCategory} onChange={(v) => setForecastCategory(v as ForecastCategory)} options={[
-                  ["unclassified", "Unclassified"], ["commit", "Commit"], ["best_case", "Best case"], ["stretch", "Stretch"],
+                  ["unclassified", "Não classificado"], ["commit", "Compromisso"], ["best_case", "Melhor cenário"], ["stretch", "Meta ambiciosa"],
                 ]} /></Field>
                 <Field label="Recycle on"><Input type="datetime-local" value={recycleAt} onChange={(e) => setRecycleAt(e.target.value)} className="border-border bg-muted" /></Field>
                 <Field label="Loss reason"><Input value={lossReason} onChange={(e) => setLossReason(e.target.value)} placeholder="Required when lost" className="border-border bg-muted" /></Field>
               </div>
             </FormSection>
 
-            <FormSection title="Consent and handoff">
+              <FormSection title="Consentimento e passagem">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Contact consent"><Select value={consentStatus} onChange={(v) => setConsentStatus(v as ConsentStatus)} options={[
+                <Field label="Consentimento do contato"><Select value={consentStatus} onChange={(v) => setConsentStatus(v as ConsentStatus)} options={[
                   ["unknown", "Unknown"], ["granted", "Granted"], ["revoked", "Revoked"], ["not_required", "Not required"],
                 ]} /></Field>
-                <Field label="Consent source"><Input value={consentSource} onChange={(e) => setConsentSource(e.target.value)} placeholder="Form, event, referral…" className="border-border bg-muted" /></Field>
-                <Field label="Handoff status"><Select value={handoffStatus} onChange={(v) => setHandoffStatus(v as HandoffStatus)} options={[
-                  ["not_started", "Not started"], ["pending", "Pending"], ["complete", "Complete"], ["blocked", "Blocked"],
+                <Field label="Origem do consentimento"><Input value={consentSource} onChange={(e) => setConsentSource(e.target.value)} placeholder="Formulário, evento, indicação…" className="border-border bg-muted" /></Field>
+                <Field label="Status da passagem"><Select value={handoffStatus} onChange={(v) => setHandoffStatus(v as HandoffStatus)} options={[
+                  ["not_started", "Não iniciado"], ["pending", "Pendente"], ["complete", "Concluído"], ["blocked", "Bloqueado"],
                 ]} /></Field>
               </div>
-              <Field label="Commercial handoff notes (do not include clinical records)">
+              <Field label="Notas da passagem comercial (não inclua prontuários)">
                 <Textarea value={handoffNotes} onChange={(e) => setHandoffNotes(e.target.value)} placeholder="Promises, preferences and agreed next steps" className="min-h-20 border-border bg-muted" />
               </Field>
             </FormSection>

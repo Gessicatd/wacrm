@@ -122,7 +122,7 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
         />
         <Metric
           icon={<TrendingUp className="h-4 w-4 text-purple-400" />}
-          label="Commit"
+          label="Comprometido"
           value={formatCurrency(stats.forecast.commit, defaultCurrency)}
           tooltip="Revenue backed by a confirmed decision path for the selected period."
         />
@@ -140,7 +140,7 @@ export function PipelineAnalytics({ stages, deals }: PipelineAnalyticsProps) {
         />
         <Metric
           icon={<Info className="h-4 w-4 text-red-400" />}
-          label="Action exceptions"
+          label="Exceções de ação"
           value={String(stats.actionExceptions)}
           tooltip="Open deals without a valid future action or with an overdue action."
         />
