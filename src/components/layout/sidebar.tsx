@@ -108,6 +108,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", labelKey: "nav.broadcasts", icon: Radio },
   { href: "/automations", labelKey: "nav.automations", icon: Zap },
   { href: "/payments", labelKey: "nav.payments", icon: CreditCard },
+  { href: "/legal", labelKey: "nav.legal", icon: Shield },
   { href: "/flows", labelKey: "nav.flows", icon: Workflow, beta: true },
   { href: "/media-library", labelKey: "nav.mediaLibrary", icon: FolderOpen },
 ];

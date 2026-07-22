@@ -17,6 +17,7 @@ const en: TranslationDict = {
   'nav.settings': 'Settings',
   'nav.apiDocs': 'API Docs',
   'nav.mediaLibrary': 'Media Library',
+  'nav.legal': 'Legal',
 
   // Roles
   'role.owner': 'Owner',
