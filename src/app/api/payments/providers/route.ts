@@ -5,6 +5,7 @@ import { encrypt } from "@/lib/whatsapp/encryption";
 const PROVIDER_DOCS: Record<string, string> = {
   mercado_pago: "https://www.mercadopago.com.br/developers/pt/docs/your-integrations/credentials",
   asaas: "https://docs.asaas.com/docs/autenticacao",
+  pagbank: "https://developer.pagbank.com.br/docs/apis-pagbank",
   banco_pix: "https://www.bcb.gov.br/estabilidadefinanceira/pix",
 };
 
