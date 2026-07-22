@@ -1,5 +1,5 @@
 export const ONBOARDING_OPTIONS = {
-  specialty: ["Clínica de estética", "Médico(a) focado(a) em beleza", "Odontologia", "Outro serviço high-ticket"],
+  specialty: ["Clínica ou profissional de saúde", "Profissional liberal", "Consultoria ou especialista", "Educação ou treinamento", "Outro serviço"],
   ticket: ["Até R$ 3 mil", "R$ 3 mil a R$ 10 mil", "R$ 10 mil a R$ 30 mil", "Acima de R$ 30 mil"],
   salesPath: ["WhatsApp", "Instagram", "Indicação", "Múltiplos canais sem processo único"],
   responseTime: ["Até 5 minutos", "Até 1 hora", "No mesmo dia", "Não sei medir"],
