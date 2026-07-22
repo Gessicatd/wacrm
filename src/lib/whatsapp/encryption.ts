@@ -26,7 +26,9 @@ import crypto from 'crypto'
  *   `src/app/api/whatsapp/send/route.ts`.
  */
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY
+// Use an empty fallback for TypeScript narrowing; the guard below still
+// fails closed before any cipher is created when the secret is absent/invalid.
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY ?? ''
 if (!ENCRYPTION_KEY || !/^[0-9a-fA-F]{64}$/.test(ENCRYPTION_KEY)) {
   throw new Error('ENCRYPTION_KEY must be a 32-byte hex value; refusing to start without a valid key')
 }
