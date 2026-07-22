@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Bot, CheckCircle2, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react";
 import { COMMERCIAL_AGENTS, agentReadiness, type CommercialAgent } from "@/lib/commercial/agents";
 import { QuickTutorial } from "@/components/commercial/quick-tutorial";
+import { useMemo, useState } from "react";
 
 export default function CommercialAgentsPage() {
   const ready = COMMERCIAL_AGENTS.filter((agent) => agent.status === "ready").length;
@@ -14,9 +15,31 @@ export default function CommercialAgentsPage() {
       <div className="mt-5 grid gap-3 sm:grid-cols-3"><Safety icon={ShieldCheck} title="Sem dados clínicos" text="Os agentes operam sobre o processo comercial, nunca sobre prontuários." /><Safety icon={LockKeyhole} title="Ações auditáveis" text="Cada proposta, aprovação e execução terá registro por conta." /><Safety icon={CheckCircle2} title="Humano no controle" text="Preço, reclamação, clínica e publicação exigem aprovação." /></div>
     </header>
     <section className="grid gap-4 md:grid-cols-2">{COMMERCIAL_AGENTS.map((agent) => <AgentCard key={agent.key} agent={agent} />)}</section>
+    <AgentTestLab />
     <section className="rounded-2xl border border-border bg-card p-6"><div className="flex items-start gap-3"><Sparkles className="mt-1 h-5 w-5 text-primary" /><div><h2 className="font-semibold">Como isso entra no cronograma</h2><p className="mt-1 text-sm text-muted-foreground">A base de conhecimento e o CRM são construídos junto com os agentes. O próximo agente a receber um fluxo completo é o de diagnóstico, seguido pelo planejamento estratégico e pelo follow-up.</p></div></div><div className="mt-5 grid gap-3 md:grid-cols-3"><Roadmap n="01" title="Contexto" text="Metodologia, onboarding, conversas e indicadores." /><Roadmap n="02" title="Recomendação" text="O agente explica o que encontrou e propõe a próxima ação." /><Roadmap n="03" title="Execução controlada" text="A equipe aprova; o CRM registra e executa o permitido." /></div></section>
     <QuickTutorial title="Como trabalhar com os agentes" steps={["Escolha o agente pela função e confira se ele está pronto ou ainda em construção.", "Leia objetivo, ferramentas permitidas, conhecimento utilizado e limite de autonomia.", "Execute pelo fluxo correspondente e confira evidências e logs na revisão.", "Aprove decisões estratégicas ou externas antes de permitir qualquer execução."]} note="Agentes sugerem e organizam; preço, publicação, reclamações e exceções continuam sob responsabilidade humana." />
   </main>;
+}
+
+function AgentTestLab() {
+  const [agentKey, setAgentKey] = useState(COMMERCIAL_AGENTS[0].key);
+  const [knowledge, setKnowledge] = useState("Use apenas informações confirmadas na base. Quando faltar contexto, faça uma pergunta objetiva e encaminhe para uma pessoa. Nunca invente preço, prazo ou promessa.");
+  const [message, setMessage] = useState("Quero entender por que meu comercial não converte.");
+  const [result, setResult] = useState<string | null>(null);
+  const agent = useMemo(() => COMMERCIAL_AGENTS.find((item) => item.key === agentKey) ?? COMMERCIAL_AGENTS[0], [agentKey]);
+  function runTest() {
+    const asksForHuman = /humano|pessoa|atendente|reclama|não sei|nao sei/i.test(message);
+    setResult(asksForHuman
+      ? "Resultado de teste: encaminhar para atendimento humano. O agente não deve responder sem evidência suficiente."
+      : `Resultado de teste para ${agent.name}: identificar intenção, registrar contexto e sugerir a próxima pergunta. Nenhuma ação externa foi executada.`);
+  }
+  return <section className="rounded-2xl border border-primary/20 bg-primary/5 p-6">
+    <div className="flex items-start gap-3"><Bot className="mt-1 h-5 w-5 text-primary" /><div><h2 className="font-semibold">Laboratório do agente</h2><p className="mt-1 text-sm text-muted-foreground">Treine com regras e base de conhecimento, teste conversas e só depois publique. Os testes são isolados e não enviam mensagens nem alteram o CRM.</p></div></div>
+    <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="space-y-3"><label className="block text-xs font-medium">Agente<select value={agentKey} onChange={(event) => setAgentKey(event.target.value)} className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm">{COMMERCIAL_AGENTS.map((item) => <option key={item.key} value={item.key}>{item.name}</option>)}</select></label><label className="block text-xs font-medium">Base e regras de treinamento<textarea value={knowledge} onChange={(event) => setKnowledge(event.target.value)} rows={5} className="mt-1 w-full rounded-md border bg-background p-3 text-sm" /></label></div>
+      <div className="space-y-3"><label className="block text-xs font-medium">Mensagem de teste<textarea value={message} onChange={(event) => setMessage(event.target.value)} rows={5} className="mt-1 w-full rounded-md border bg-background p-3 text-sm" /></label><button type="button" onClick={runTest} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Executar teste isolado</button>{result && <div className="rounded-lg border border-border bg-background p-3 text-sm" role="status"><p className="font-medium">Prévia da decisão</p><p className="mt-1 text-muted-foreground">{result}</p><p className="mt-2 text-xs text-muted-foreground">Base carregada: {knowledge.trim() ? "sim" : "não"} · Produção: não publicado</p></div>}</div>
+    </div>
+  </section>;
 }
 
 function AgentCard({ agent }: { agent: CommercialAgent }) { return <article className="rounded-2xl border border-border bg-card p-5"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bot className="h-5 w-5" /></span><div><h2 className="font-semibold">{agent.name}</h2><p className="mt-1 text-xs text-muted-foreground">{agentReadiness(agent)} · {agent.autonomy === "suggest" ? "Sugestão" : agent.autonomy === "approved_execution" ? "Execução aprovada" : "Automático"}</p></div></div><span className={`rounded-full px-2 py-1 text-[10px] font-medium ${agent.status === "ready" ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"}`}>{agent.status === "ready" ? "Pronto" : "Em construção"}</span></div><p className="mt-4 text-sm leading-relaxed text-muted-foreground">{agent.description}</p><div className="mt-4 space-y-3 border-t border-border pt-4"><div><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Objetivo</p><p className="mt-1 text-xs">{agent.purpose}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Ferramentas</p><p className="mt-1 text-xs text-muted-foreground">{agent.tools.join(" · ")}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Limite</p><p className="mt-1 text-xs text-muted-foreground">{agent.approval}</p></div></div><div className="mt-4 flex flex-wrap gap-1">{agent.knowledge.map((scope) => <span key={scope} className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">{scope}</span>)}</div><p className="mt-4 rounded-lg bg-primary/5 p-3 text-xs"><strong>Próximo passo:</strong> {agent.nextStep}</p></article> }
