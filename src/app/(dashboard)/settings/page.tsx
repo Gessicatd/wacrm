@@ -22,6 +22,7 @@ import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import { AiConfig } from '@/components/settings/ai-config';
+import { IntegrationsHub } from '@/components/settings/integrations-hub';
 import {
   resolveSection,
   type SettingsSection,
@@ -77,6 +78,7 @@ function SettingsPageContent() {
     ryzeapi: <RyzeApiConfig />,
     calendar: <CalendarConfig />,
     marketing: <MarketingIntegrations />,
+    integrations: <IntegrationsHub />,
     templates: <TemplateManager />,
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
