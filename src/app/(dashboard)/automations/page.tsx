@@ -55,6 +55,9 @@ const TEMPLATE_ORDER: TemplateSlug[] = [
   "health_lead_intake",
   "appointment_confirmation",
   "plan_follow_up",
+  "payment_confirmed_handoff",
+  "consultation_intake",
+  "human_review_ai_triage",
 ]
 
 const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
@@ -65,6 +68,9 @@ const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
   health_lead_intake: HeartHandshake,
   appointment_confirmation: CalendarCheck,
   plan_follow_up: ClipboardCheck,
+  payment_confirmed_handoff: CalendarCheck,
+  consultation_intake: ClipboardCheck,
+  human_review_ai_triage: HeartHandshake,
 }
 
 export default function AutomationsPage() {

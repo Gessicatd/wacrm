@@ -292,6 +292,22 @@ const LEAD_CAPTURE: FlowTemplate = {
 };
 
 // ============================================================
+// 4–8. Templates used by the consulting / commercial operation
+// ============================================================
+function intakeTemplate(slug: string, name: string, description: string, trigger: string[], questions: Array<[string, string]>, handoff: string): FlowTemplate {
+  const nodes: FlowTemplateNode[] = [{ node_key: "start", node_type: "start", config: { next_node_key: "intro" } }, { node_key: "intro", node_type: "send_message", config: { text: "Olá! Vou fazer algumas perguntas rápidas para entender seu contexto e encaminhar você para a pessoa certa.", next_node_key: "q1" } as SendMessageNodeConfig }];
+  questions.forEach(([key, prompt], index) => nodes.push({ node_key: `q${index + 1}`, node_type: "collect_input", config: { prompt_text: prompt, var_key: key, next_node_key: index === questions.length - 1 ? "handoff" : `q${index + 2}` } as CollectInputNodeConfig }));
+  nodes.push({ node_key: "handoff", node_type: "handoff", config: { note: `${handoff} Dados: ${questions.map(([key]) => `${key}={{vars.${key}}}`).join(", ")}` } as HandoffNodeConfig });
+  return { slug, name, description, icon: "MessageSquare", trigger_type: "keyword", trigger_config: { keywords: trigger, match_type: "contains" }, entry_node_id: "start", nodes };
+}
+
+const DIAGNOSTIC_INTAKE = intakeTemplate("business_diagnostic_intake", "Diagnóstico empresarial", "Coleta contexto, gargalo e meta antes do diagnóstico consultivo.", ["diagnostico", "diagnóstico", "analisar meu negócio"], [["company", "Qual é o nome da empresa?"], ["segment", "Em que segmento vocês atuam?"], ["bottleneck", "Qual é o principal gargalo comercial hoje?"], ["goal", "Qual resultado você quer alcançar nos próximos 90 dias?"]], "Novo diagnóstico para revisão humana.");
+const CONSULTATION_BOOKING = intakeTemplate("consultation_booking", "Agendamento de consulta", "Qualifica o pedido de consulta e entrega o contexto para agendamento ou cobrança.", ["consulta", "agendar", "reunião"], [["service", "Qual serviço ou tema você quer tratar?"], ["preferred_time", "Qual melhor dia e horário para falar?"], ["contact", "Qual e-mail ou telefone para confirmarmos?"]], "Pedido de consulta pronto para confirmação e pagamento.");
+const RESEARCH_BRIEF = intakeTemplate("research_brief", "Briefing de pesquisa e benchmark", "Recebe o briefing mínimo para pesquisa de mercado, concorrentes, preço e posicionamento.", ["pesquisa", "benchmark", "concorrentes"], [["market", "Qual mercado ou região devemos pesquisar?"], ["offer", "Qual produto ou oferta será analisado?"], ["competitors", "Quais concorrentes ou referências já conhece?"], ["decision", "Que decisão essa pesquisa precisa apoiar?"]], "Briefing de pesquisa aguardando execução e fontes.");
+const STRATEGIC_ONBOARDING = intakeTemplate("strategic_onboarding", "Onboarding do plano estratégico", "Organiza informações para ICP, persona, SWOT, oferta e plano de ação.", ["planejamento", "plano estratégico", "estratégia"], [["business_stage", "Em que fase a empresa está hoje?"], ["ideal_customer", "Quem é o cliente ideal atualmente?"], ["strength", "Qual é a maior força do negócio?"], ["priority", "Qual prioridade deve entrar no plano de ação?"]], "Onboarding estratégico pronto para análise dos agentes.");
+const POST_CONSULTATION_FOLLOWUP = intakeTemplate("post_consultation_followup", "Pós-consulta e próximo passo", "Recolhe feedback, pendências e autorização para o próximo workflow.", ["feedback", "próximo passo", "pos consulta"], [["feedback", "O que foi mais útil na consulta?"], ["pending", "O que ficou pendente ou precisa de correção?"], ["next_step", "Qual próximo passo você quer executar?"]], "Feedback recebido; revisar antes de iniciar o próximo fluxo.");
+
+// ============================================================
 // Registry
 // ============================================================
 
@@ -299,6 +315,11 @@ const TEMPLATES: Record<string, FlowTemplate> = {
   welcome_menu: WELCOME_MENU,
   faq_bot: FAQ_BOT,
   lead_capture: LEAD_CAPTURE,
+  business_diagnostic_intake: DIAGNOSTIC_INTAKE,
+  consultation_booking: CONSULTATION_BOOKING,
+  research_brief: RESEARCH_BRIEF,
+  strategic_onboarding: STRATEGIC_ONBOARDING,
+  post_consultation_followup: POST_CONSULTATION_FOLLOWUP,
 };
 
 export function getFlowTemplate(slug: string): FlowTemplate | null {
